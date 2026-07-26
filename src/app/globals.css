@@ -163,6 +163,11 @@ body {
   font-family: inherit;
   outline: none;
 }
+/* Tiles that are still loading (or failed) show the dark map colour instead of
+   white, so gaps revealed while zooming out blend into the basemap. */
+.leaflet-tile {
+  background-color: #0a0e16;
+}
 /* divIcon default has a white box + border — strip it so our pin shows */
 .leaflet-div-icon {
   background: transparent;

@@ -129,90 +129,6 @@ export default function MapView({ markers, loadError }: Props) {
       const L = (await import("leaflet")).default;
       leafletRef.current = L;
       if (cancelled || !mapContainer.current || mapRef.current) return;
-      // Continuous, Google-Maps-style wheel zoom: the map eases toward the zoom
-      // goal every animation frame, so raster tiles glide between levels and the
-      // tile refresh rides along the motion instead of popping in at each step.
-      const LMap: any = L.Map;
-      const D: any = L.DomEvent;
-      if (!LMap.SmoothWheelZoom) {
-        LMap.mergeOptions({ smoothWheelZoom: true, smoothSensitivity: 1 });
-        LMap.SmoothWheelZoom = L.Handler.extend({
-          addHooks() {
-            D.on((this as any)._map._container, "wheel", (this as any)._onWheelScroll, this);
-          },
-          removeHooks() {
-            D.off((this as any)._map._container, "wheel", (this as any)._onWheelScroll, this);
-          },
-          _onWheelScroll(e: any) {
-            const t: any = this;
-            if (!t._isWheeling) t._onWheelStart(e);
-            t._onWheeling(e);
-          },
-          _onWheelStart(e: any) {
-            const t: any = this;
-            const map = t._map;
-            t._isWheeling = true;
-            t._wheelMousePosition = map.mouseEventToContainerPoint(e);
-            t._centerPoint = map.getSize()._divideBy(2);
-            t._startLatLng = map.containerPointToLatLng(t._centerPoint);
-            t._wheelStartLatLng = map.containerPointToLatLng(t._wheelMousePosition);
-            t._startZoom = map.getZoom();
-            t._moved = false;
-            t._zooming = true;
-            map._stop();
-            if (map._panAnim) map._panAnim.stop();
-            t._goalZoom = map.getZoom();
-            t._prevCenter = map.getCenter();
-            t._prevZoom = map.getZoom();
-            t._zoomAnimationId = requestAnimationFrame(t._updateWheelZoom.bind(t));
-          },
-          _onWheeling(e: any) {
-            const t: any = this;
-            const map = t._map;
-            t._goalZoom =
-              t._goalZoom + D.getWheelDelta(e) * 0.003 * map.options.smoothSensitivity;
-            if (t._goalZoom < map.getMinZoom() || t._goalZoom > map.getMaxZoom()) {
-              t._goalZoom = map._limitZoom(t._goalZoom);
-            }
-            t._wheelMousePosition = map.mouseEventToContainerPoint(e);
-            clearTimeout(t._timeoutId);
-            t._timeoutId = setTimeout(t._onWheelEnd.bind(t), 200);
-            D.preventDefault(e);
-            D.stopPropagation(e);
-          },
-          _onWheelEnd() {
-            const t: any = this;
-            t._isWheeling = false;
-            cancelAnimationFrame(t._zoomAnimationId);
-            t._map._moveEnd(true);
-          },
-          _updateWheelZoom() {
-            const t: any = this;
-            const map = t._map;
-            if (
-              !map.getCenter().equals(t._prevCenter) ||
-              map.getZoom() != t._prevZoom
-            )
-              return;
-            t._zoom = map.getZoom() + (t._goalZoom - map.getZoom()) * 0.3;
-            t._zoom = Math.floor(t._zoom * 100) / 100;
-            const delta = t._wheelMousePosition.subtract(t._centerPoint);
-            t._center =
-              delta.x === 0 && delta.y === 0
-                ? map.getCenter()
-                : map.unproject(
-                    map.project(t._wheelStartLatLng, t._zoom).subtract(delta),
-                    t._zoom,
-                  );
-            map.setView(t._center, t._zoom, { animate: false });
-            t._prevCenter = map.getCenter();
-            t._prevZoom = map.getZoom();
-            t._zoomAnimationId = requestAnimationFrame(t._updateWheelZoom.bind(t));
-          },
-        });
-        LMap.addInitHook("addHandler", "smoothWheelZoom", LMap.SmoothWheelZoom);
-      }
-
       map = L.map(mapContainer.current, {
         center: [50, 10],
         zoom: 4,
@@ -221,18 +137,18 @@ export default function MapView({ markers, loadError }: Props) {
         zoomControl: false,
         worldCopyJump: true,
         attributionControl: true,
-        scrollWheelZoom: false, // replaced by the smooth handler below
-        smoothWheelZoom: true,
-        smoothSensitivity: 1.5,
-      } as any);
+        // Fractional zoom (native, reliable) — smoother than integer steps.
+        zoomSnap: 0,
+        wheelDebounceTime: 30,
+      });
       L.tileLayer(TILE_URL, {
         subdomains: "abcd",
         maxZoom: 20,
         attribution: TILE_ATTRIB,
         crossOrigin: true,
-        // Keep neighbouring tiles as a backdrop so the map never blanks while the
-        // new level streams in during the continuous zoom.
-        keepBuffer: 4,
+        // Preload a wide ring so zooming out / panning doesn't reveal blanks;
+        // unloaded tiles render dark (see globals.css) so gaps never flash white.
+        keepBuffer: 6,
       }).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
       mapRef.current = map;

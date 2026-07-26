@@ -14,7 +14,7 @@ export default function SetupNotice() {
           The site is deployed but not yet connected to the database. Add these
           environment variables in the Vercel project settings and redeploy:
         </p>
-        <div className="rounded-md border border-white/10 bg-base-800 p-4 font-mono text-xs text-white/80">
+        <div className="rounded-[2px] border border-white/10 bg-base-800 p-4 font-mono text-xs text-white/80">
           <div>
             <span className="text-accent-bright">SUPABASE_URL</span>
             <span className="text-white/40"> = https://xxxx.supabase.co</span>

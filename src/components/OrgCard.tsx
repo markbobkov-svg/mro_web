@@ -6,9 +6,9 @@ import type { OrgAtAirport } from "@/lib/types";
 const SCOPE_PREVIEW = 12;
 
 const SCOPE_STYLE: Record<string, string> = {
-  line: "border border-white/15 text-white/55",
-  base: "border border-white/30 text-white/85",
-  both: "border border-white/20 text-white/70",
+  line: "bg-emerald-400/10 text-emerald-300",
+  base: "bg-amber-400/10 text-amber-300",
+  both: "bg-accent/15 text-accent-bright",
 };
 
 export default function OrgCard({ org }: { org: OrgAtAirport }) {
@@ -23,7 +23,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
   const hiddenCount = org.scope.length - shown.length;
 
   return (
-    <div className="rounded-[2px] border border-white/10 bg-white/[0.02] p-4">
+    <div className="group rounded-[2px] border border-white/10 bg-base-800/70 p-4 transition hover:border-white/20 hover:bg-base-800">
       {/* header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -40,7 +40,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
           <span
             className={
               "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 " +
-              (SCOPE_STYLE[org.locationScope] ?? "border border-white/15 text-white/60")
+              (SCOPE_STYLE[org.locationScope] ?? "bg-white/10 text-white/60")
             }
           >
             {org.locationScope}
@@ -50,7 +50,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
 
       {/* Part-145 approval */}
       {part145 ? (
-        <div className="mt-3 rounded-[2px] border border-white/12 bg-white/[0.03] px-3 py-2">
+        <div className="mt-3 rounded-[2px] border border-accent/25 bg-accent/[0.06] px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide2 text-accent-bright">
               Part-145
@@ -71,7 +71,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
               {part145.ratings.map((r) => (
                 <span
                   key={r}
-                  className="rounded-[2px] border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-white/70"
+                  className="rounded-[2px] bg-white/[0.07] px-1.5 py-0.5 font-mono text-[10px] text-white/70"
                 >
                   {r}
                 </span>
@@ -109,7 +109,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
             {shown.map((s, i) => (
               <span
                 key={s + i}
-                className="max-w-full truncate rounded-[2px] border border-white/8 bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-white/70"
+                className="max-w-full truncate rounded-[2px] bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-white/75"
                 title={s}
               >
                 {s}
@@ -118,7 +118,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
             {hiddenCount > 0 && (
               <button
                 onClick={() => setExpanded(true)}
-                className="rounded-[2px] border border-white/10 px-1.5 py-0.5 text-[11px] text-white/55 hover:border-white/20 hover:text-white/80"
+                className="rounded-[2px] bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-accent-bright hover:bg-white/[0.08]"
               >
                 +{hiddenCount} more
               </button>

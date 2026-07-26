@@ -42,7 +42,7 @@ export default function AirportPanel({
 
         <div className="flex items-center gap-3">
           {code && (
-            <span className="rounded-[2px] border border-white/20 bg-white/[0.05] px-2 py-1 font-mono text-lg font-medium tracking-wide2 text-white">
+            <span className="rounded-[2px] border border-accent/40 bg-accent/10 px-2 py-1 font-mono text-lg font-semibold tracking-wide2 text-accent-bright">
               {code}
             </span>
           )}
@@ -67,7 +67,7 @@ export default function AirportPanel({
         {loading && <PanelSkeleton />}
 
         {!loading && error && (
-          <div className="mx-2 mt-6 rounded-md border border-red-500/30 bg-red-950/40 p-4 text-sm text-red-200">
+          <div className="mx-2 mt-6 rounded-[2px] border border-red-500/30 bg-red-950/40 p-4 text-sm text-red-200">
             {error}
           </div>
         )}
@@ -104,14 +104,14 @@ function PanelSkeleton() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="animate-fade-in rounded-lg border border-white/5 bg-base-800/60 p-4"
+          className="animate-fade-in rounded-[2px] border border-white/5 bg-base-800/60 p-4"
         >
-          <div className="h-4 w-2/3 rounded bg-white/10" />
-          <div className="mt-3 h-3 w-1/3 rounded bg-white/5" />
+          <div className="h-4 w-2/3 rounded-[2px] bg-white/10" />
+          <div className="mt-3 h-3 w-1/3 rounded-[2px] bg-white/5" />
           <div className="mt-4 flex gap-2">
-            <div className="h-5 w-12 rounded bg-white/5" />
-            <div className="h-5 w-12 rounded bg-white/5" />
-            <div className="h-5 w-12 rounded bg-white/5" />
+            <div className="h-5 w-12 rounded-[2px] bg-white/5" />
+            <div className="h-5 w-12 rounded-[2px] bg-white/5" />
+            <div className="h-5 w-12 rounded-[2px] bg-white/5" />
           </div>
         </div>
       ))}

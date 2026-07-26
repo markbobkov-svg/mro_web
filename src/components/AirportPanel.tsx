@@ -22,7 +22,7 @@ export default function AirportPanel({
   const orgs = detail?.organisations ?? [];
 
   return (
-    <aside className="animate-slide-in absolute right-0 top-0 z-30 flex h-full w-full flex-col border-l border-white/10 bg-base-900/95 backdrop-blur-xl sm:w-[420px]">
+    <aside className="animate-slide-in absolute right-0 top-0 z-[700] flex h-full w-full flex-col border-l border-white/10 bg-base-900/95 backdrop-blur-xl sm:w-[420px]">
       {/* header */}
       <div className="relative border-b border-white/10 px-6 pb-5 pt-6">
         <button
@@ -52,10 +52,12 @@ export default function AirportPanel({
             </span>
           )}
         </div>
-        <h2 className="mt-3 pr-8 text-lg font-light leading-snug text-white">
-          {marker.name}
-        </h2>
-        {marker.city && (
+        {marker.name && marker.name.toUpperCase() !== code.toUpperCase() && (
+          <h2 className="mt-3 pr-8 text-lg font-light leading-snug text-white">
+            {marker.name}
+          </h2>
+        )}
+        {marker.city && marker.city.toUpperCase() !== code.toUpperCase() && (
           <p className="mt-0.5 text-sm text-white/45">{marker.city}</p>
         )}
       </div>

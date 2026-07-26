@@ -1,35 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "maplibre-gl/dist/maplibre-gl.css";
+import "leaflet/dist/leaflet.css";
 import type { AirportMarker, AirportDetail } from "@/lib/types";
 import AirportPanel from "./AirportPanel";
 
-// Free CARTO "dark matter" basemap as RASTER tiles — no API token required.
-// Raster (plain PNGs) is far more robust than the vector GL style, which pulls
-// a style.json + vector tiles + glyphs + sprite from several hosts (any one
-// failing leaves a blank map). These tiles are CORS-enabled and public.
-const MAP_STYLE: any = {
-  version: 8,
-  sources: {
-    "carto-dark": {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
-    },
-  },
-  layers: [
-    { id: "bg", type: "background", paint: { "background-color": "#0a0e16" } },
-    { id: "carto-dark", type: "raster", source: "carto-dark" },
-  ],
-};
+// Free CARTO "dark matter" RASTER tiles — plain <img> tiles rendered by Leaflet
+// with no WebGL, so the dark world map shows in every browser regardless of GPU
+// / hardware-acceleration settings. CORS-enabled, no token.
+const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const TILE_ATTRIB =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 interface Props {
   markers: AirportMarker[];
@@ -39,8 +20,8 @@ interface Props {
 export default function MapView({ markers, loadError }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const markerEls = useRef<Map<string, HTMLElement>>(new Map());
-  const markerObjs = useRef<any[]>([]);
+  const leafletRef = useRef<any>(null);
+  const markerObjs = useRef<Map<string, any>>(new Map());
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
   const activeIdRef = useRef<string | null>(null);
 
@@ -61,14 +42,13 @@ export default function MapView({ markers, loadError }: Props) {
     const q = search.trim().toLowerCase();
     if (!q) return [];
     return markers
-      .filter((m) => {
-        return (
+      .filter(
+        (m) =>
           m.iata?.toLowerCase().includes(q) ||
           m.icao?.toLowerCase().includes(q) ||
           m.name.toLowerCase().includes(q) ||
-          m.city?.toLowerCase().includes(q)
-        );
-      })
+          m.city?.toLowerCase().includes(q),
+      )
       .sort((a, b) => b.orgCount - a.orgCount)
       .slice(0, 8);
   }, [search, markers]);
@@ -103,27 +83,34 @@ export default function MapView({ markers, loadError }: Props) {
     }
   }, []);
 
+  const setActiveMarkerClass = useCallback((id: string | null) => {
+    markerObjs.current.forEach((mk, key) => {
+      const el = mk.getElement?.();
+      if (el) el.classList.toggle("marker--active", key === id);
+    });
+  }, []);
+
   const selectAirport = useCallback(
     (id: string) => {
       activeIdRef.current = id;
       setActiveId(id);
-      markerEls.current.forEach((el, key) =>
-        el.classList.toggle("marker--active", key === id),
-      );
+      setActiveMarkerClass(id);
       const m = markers.find((x) => x.id === id);
-      if (m && mapRef.current) {
-        const isSmall = window.innerWidth < 640;
-        mapRef.current.flyTo({
-          center: m.coordinates,
-          zoom: Math.max(mapRef.current.getZoom(), 8),
-          duration: 900,
-          essential: true,
-          padding: isSmall ? { bottom: 0 } : { right: 440 },
-        });
+      const map = mapRef.current;
+      if (m && map) {
+        const [lng, lat] = m.coordinates;
+        const targetZoom = Math.max(map.getZoom(), 8);
+        let center: any = [lat, lng];
+        // shift the target left so the pin isn't hidden behind the right panel
+        if (typeof window !== "undefined" && window.innerWidth >= 640) {
+          const pt = map.project([lat, lng], targetZoom).subtract([210, 0]);
+          center = map.unproject(pt, targetZoom);
+        }
+        map.flyTo(center, targetZoom, { duration: 0.8 });
       }
       loadDetail(id);
     },
-    [markers, loadDetail],
+    [markers, loadDetail, setActiveMarkerClass],
   );
 
   const closePanel = useCallback(() => {
@@ -131,96 +118,75 @@ export default function MapView({ markers, loadError }: Props) {
     setActiveId(null);
     setDetail(null);
     setDetailError(null);
-    markerEls.current.forEach((el) => el.classList.remove("marker--active"));
-  }, []);
+    setActiveMarkerClass(null);
+  }, [setActiveMarkerClass]);
 
   // Initialise the map once.
   useEffect(() => {
     let cancelled = false;
     let map: any;
-    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
-      const maplibregl = (await import("maplibre-gl")).default;
-      if (cancelled || !mapContainer.current) return;
-      map = new maplibregl.Map({
-        container: mapContainer.current,
-        style: MAP_STYLE,
-        center: [10, 50],
-        zoom: 3.6,
+      const L = (await import("leaflet")).default;
+      leafletRef.current = L;
+      if (cancelled || !mapContainer.current || mapRef.current) return;
+      map = L.map(mapContainer.current, {
+        center: [50, 10],
+        zoom: 4,
         minZoom: 2,
-        maxZoom: 15,
-        attributionControl: false,
-        dragRotate: false,
+        maxZoom: 18,
+        zoomControl: false,
+        worldCopyJump: true,
+        attributionControl: true,
       });
-      map.touchZoomRotate.disableRotation();
-      map.addControl(
-        new maplibregl.NavigationControl({ showCompass: false }),
-        "bottom-right",
-      );
-      map.addControl(
-        new maplibregl.AttributionControl({ compact: true }),
-        "bottom-right",
-      );
+      L.tileLayer(TILE_URL, {
+        subdomains: "abcd",
+        maxZoom: 20,
+        attribution: TILE_ATTRIB,
+      }).addTo(map);
+      L.control.zoom({ position: "bottomright" }).addTo(map);
       mapRef.current = map;
-      map.on("load", () => {
-        if (cancelled) return;
-        map.resize(); // guard against a mis-sized container at init
-        setReady(true);
-      });
-      // Log tile/style errors (helps diagnose a blank basemap) without crashing.
-      map.on("error", (e: any) => {
-        if (e?.error) console.warn("map error:", e.error?.message || e.error);
-      });
-      // Fallback: markers are DOM overlays and don't need the basemap style, so
-      // render them even if the style is slow or unreachable (blank dark map is
-      // still usable via search + pins).
-      fallbackTimer = setTimeout(() => {
-        if (!cancelled) setReady(true);
-      }, 3500);
+      // container may have been 0-sized during hydration
+      setTimeout(() => {
+        if (!cancelled && mapRef.current) mapRef.current.invalidateSize();
+      }, 0);
+      setReady(true);
     })();
     return () => {
       cancelled = true;
-      if (fallbackTimer) clearTimeout(fallbackTimer);
       if (map) map.remove();
+      mapRef.current = null;
     };
   }, []);
 
   // Place markers once the map is ready (or when the data changes).
   useEffect(() => {
-    if (!ready || !mapRef.current) return;
-    let cancelled = false;
-    (async () => {
-      const maplibregl = (await import("maplibre-gl")).default;
-      if (cancelled) return;
-      const map = mapRef.current;
+    if (!ready || !mapRef.current || !leafletRef.current) return;
+    const L = leafletRef.current;
+    const map = mapRef.current;
 
-      markerObjs.current.forEach((mk) => mk.remove());
-      markerObjs.current = [];
-      markerEls.current.clear();
+    markerObjs.current.forEach((mk) => map.removeLayer(mk));
+    markerObjs.current.clear();
 
-      for (const m of markers) {
-        const el = document.createElement("div");
-        el.className = "marker" + (m.orgCount >= 5 ? " marker--lg" : "");
-        el.innerHTML =
-          '<span class="marker__pulse"></span><span class="marker__dot"></span>';
-        const code = m.iata ?? m.icao ?? "";
-        el.title = `${code ? code + " — " : ""}${m.name}${
+    for (const m of markers) {
+      const [lng, lat] = m.coordinates;
+      const icon = L.divIcon({
+        className: "marker" + (m.orgCount >= 5 ? " marker--lg" : ""),
+        html: '<span class="marker__pulse"></span><span class="marker__dot"></span>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      const code = m.iata ?? m.icao ?? "";
+      const marker = L.marker([lat, lng], {
+        icon,
+        title: `${code ? code + " — " : ""}${m.name}${
           m.city ? ", " + m.city : ""
-        } · ${m.orgCount} MRO`;
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          selectAirport(m.id);
-        });
-        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
-          .setLngLat(m.coordinates)
-          .addTo(map);
-        markerObjs.current.push(marker);
-        markerEls.current.set(m.id, el);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+        } · ${m.orgCount} MRO`,
+        keyboard: false,
+      });
+      marker.on("click", () => selectAirport(m.id));
+      marker.addTo(map);
+      markerObjs.current.set(m.id, marker);
+    }
   }, [ready, markers, selectAirport]);
 
   const activeMarker = activeId
@@ -229,19 +195,17 @@ export default function MapView({ markers, loadError }: Props) {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
-      <div ref={mapContainer} className="absolute inset-0" />
+      <div ref={mapContainer} className="absolute inset-0 z-0" />
 
       {/* top scrim for legibility */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/80 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] h-40 bg-gradient-to-b from-black/80 to-transparent" />
 
       {/* brand + search */}
-      <div className="absolute left-0 top-0 z-20 flex w-full max-w-md flex-col gap-4 p-5 sm:p-6">
+      <div className="absolute left-0 top-0 z-[500] flex w-full max-w-md flex-col gap-4 p-5 sm:p-6">
         <div className="pointer-events-none select-none">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-medium tracking-brand text-white sm:text-xl">
-              MRO&nbsp;FINDER
-            </h1>
-          </div>
+          <h1 className="text-lg font-medium tracking-brand text-white sm:text-xl">
+            MRO&nbsp;FINDER
+          </h1>
           <p className="mt-1 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
             Part-145 · Line Maintenance · Europe
           </p>
@@ -322,7 +286,7 @@ export default function MapView({ markers, loadError }: Props) {
 
       {/* bottom-left stats */}
       {!loadError && markers.length > 0 && (
-        <div className="pointer-events-none absolute bottom-5 left-5 z-10 select-none sm:bottom-6 sm:left-6">
+        <div className="pointer-events-none absolute bottom-5 left-5 z-[500] select-none sm:bottom-6 sm:left-6">
           <p className="text-[11px] uppercase tracking-wide2 text-white/45">
             <span className="text-white/80">{markers.length}</span> airports
             <span className="mx-2 text-white/20">/</span>
@@ -333,16 +297,13 @@ export default function MapView({ markers, loadError }: Props) {
 
       {/* error / empty toasts */}
       {loadError && (
-        <div className="absolute bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-md border border-red-500/30 bg-red-950/70 px-4 py-2 text-xs text-red-200 backdrop-blur">
+        <div className="absolute bottom-6 left-1/2 z-[600] -translate-x-1/2 rounded-md border border-red-500/30 bg-red-950/70 px-4 py-2 text-xs text-red-200 backdrop-blur">
           Could not load data: {loadError}
         </div>
       )}
       {!loadError && markers.length === 0 && (
-        <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 select-none text-center">
+        <div className="absolute left-1/2 top-1/2 z-[500] -translate-x-1/2 -translate-y-1/2 select-none text-center">
           <p className="text-sm text-white/50">No airports to display yet.</p>
-          <p className="mt-1 text-xs text-white/30">
-            The database returned no stations with a locatable airport.
-          </p>
         </div>
       )}
 

@@ -16,7 +16,8 @@ Data comes from the Supabase database populated by the
 ## Stack
 
 - **Next.js 14** (App Router) + TypeScript
-- **MapLibre GL JS** with the free CARTO *dark-matter* vector basemap (no token)
+- **Leaflet** with the free CARTO *dark matter* raster basemap — DOM `<img>`
+  tiles (no WebGL), so the dark map renders in any browser / GPU setting, no token
 - **Tailwind CSS** for the dark UI
 - **@supabase/supabase-js** — queried **server-side only**, so the database key
   never reaches the browser

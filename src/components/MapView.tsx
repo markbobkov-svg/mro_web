@@ -137,14 +137,38 @@ export default function MapView({ markers, loadError }: Props) {
         zoomControl: false,
         worldCopyJump: true,
         attributionControl: true,
+        // Smooth, continuous (fractional) zoom rather than integer snaps.
+        zoomSnap: 0,
+        zoomDelta: 0.6,
+        wheelPxPerZoomLevel: 130,
+        wheelDebounceTime: 20,
+        zoomAnimation: true,
+        fadeAnimation: true,
       });
       L.tileLayer(TILE_URL, {
         subdomains: "abcd",
         maxZoom: 20,
         attribution: TILE_ATTRIB,
+        crossOrigin: true,
+        // Keep a wide ring of tiles and don't thrash them mid-zoom — reduces the
+        // blank/pop-in artifacts while zooming; crisp tiles settle when idle.
+        keepBuffer: 8,
+        updateWhenZooming: false,
+        updateWhenIdle: true,
       }).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
       mapRef.current = map;
+
+      // Scale the airport points with the zoom level via the --mk CSS variable.
+      const applyMarkerScale = () => {
+        const z = map.getZoom();
+        const scale = Math.min(2.6, Math.max(0.6, 1 + (z - 4) * 0.2));
+        mapContainer.current?.style.setProperty("--mk", scale.toFixed(3));
+      };
+      applyMarkerScale();
+      map.on("zoom", applyMarkerScale);
+      map.on("zoomend", applyMarkerScale);
+
       // container may have been 0-sized during hydration
       setTimeout(() => {
         if (!cancelled && mapRef.current) mapRef.current.invalidateSize();
@@ -171,7 +195,7 @@ export default function MapView({ markers, loadError }: Props) {
       const [lng, lat] = m.coordinates;
       const icon = L.divIcon({
         className: "marker" + (m.orgCount >= 5 ? " marker--lg" : ""),
-        html: '<span class="marker__pulse"></span><span class="marker__dot"></span>',
+        html: '<span class="marker__scale"><span class="marker__pulse"></span><span class="marker__dot"></span></span>',
         iconSize: [16, 16],
         iconAnchor: [8, 8],
       });

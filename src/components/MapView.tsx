@@ -145,9 +145,12 @@ export default function MapView({ markers, loadError }: Props) {
         maxZoom: 20,
         attribution: TILE_ATTRIB,
         crossOrigin: true,
-        // Preload a wide ring so zooming out / panning doesn't reveal blanks;
-        // unloaded tiles render dark (see globals.css) so gaps never flash white.
+        // Preload a wide ring so zooming out / panning doesn't reveal blanks.
         keepBuffer: 6,
+        // Failed/rate-limited tiles render as a solid dark pixel (the map's own
+        // colour, #0a0e16) instead of the browser's white broken-image box.
+        errorTileUrl:
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPg4hMDAABUAC9qIiHaAAAAAElFTkSuQmCC",
       }).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
       mapRef.current = map;

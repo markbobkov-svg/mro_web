@@ -137,9 +137,8 @@ export default function MapView({ markers, loadError }: Props) {
         zoomControl: false,
         worldCopyJump: true,
         attributionControl: true,
-        // Fractional zoom (native, reliable) — smoother than integer steps.
-        zoomSnap: 0,
-        wheelDebounceTime: 30,
+        // default wheel zoom (one level per notch) — clear and reliable; the
+        // smooth feel comes from Leaflet's zoom animation + the tile options.
       });
       L.tileLayer(TILE_URL, {
         subdomains: "abcd",

@@ -3,10 +3,12 @@
 A full-screen, dark, SpaceX-styled map for airlines and aircraft operators to
 find **Part-145** approved maintenance organisations across European airports.
 
+**Live:** https://mro-web.vercel.app
+
 Airports that have an MRO presence are shown as glowing pins. Click a pin (or
 use the search box) and cards slide in over the map listing every organisation
-with a station there — its Part-145 certificate, EASA class ratings, the
-aircraft types it covers at that airport, and contact details.
+with a station there — its Part-145 certificate, EASA class ratings, the scope /
+aircraft it covers at that station, and contact details.
 
 Data comes from the Supabase database populated by the
 [`data_scraper`](https://github.com/markbobkov-svg/data_scraper) project.
@@ -21,16 +23,19 @@ Data comes from the Supabase database populated by the
 
 ## How it works
 
+The live database schema:
+
 ```
-airports ──< stations >── organisations ──< organisation_approvals (Part-145)
-                 │
-                 └──< station_aircraft_types >── aircraft_types
+airports ──< organisation_stations >── organisations ──< organisation_approvals (Part-145)
+                     │                                 └──< organisation_contacts
+                     └──< organisation_station_scope    (scope_text, location_scope line/base)
 ```
 
-- `getAirportMarkers()` aggregates every airport that has ≥1 station, resolves
-  its coordinates, and counts distinct organisations → map pins.
+- `getAirportMarkers()` aggregates every airport that has ≥1 `organisation_stations`
+  row, resolves its coordinates, and counts distinct organisations → map pins.
 - `GET /api/airports/[id]` returns the organisations at one airport with their
-  approvals and per-station aircraft types → the cards.
+  Part-145 approvals + ratings, the scope/aircraft they cover at that station
+  (`organisation_station_scope`), and station-matched contacts → the cards.
 
 Airport coordinates come from the `airports` table when present, and fall back
 to a bundled [OurAirports](https://ourairports.com/) lookup

@@ -203,17 +203,17 @@ export default function MapView({ markers, loadError }: Props) {
       {/* brand + search */}
       <div className="absolute left-0 top-0 z-[500] flex w-full max-w-md flex-col gap-4 p-5 sm:p-6">
         <div className="pointer-events-none select-none">
-          <h1 className="text-lg font-medium tracking-brand text-white sm:text-xl">
+          <h1 className="text-lg font-normal tracking-brand text-white sm:text-xl">
             MRO&nbsp;FINDER
           </h1>
-          <p className="mt-1 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
+          <p className="mt-1.5 text-[10px] font-medium uppercase tracking-brand text-white/35">
             Part-145 · Line Maintenance · Europe
           </p>
         </div>
 
         {/* search box */}
         <div className="pointer-events-auto relative">
-          <div className="flex items-center gap-2 rounded-md border border-white/10 bg-base-900/80 px-3 py-2 backdrop-blur-md transition focus-within:border-accent/60">
+          <div className="flex items-center gap-2 rounded-[2px] border border-white/12 bg-base-900/80 px-3 py-2.5 backdrop-blur-md transition focus-within:border-white/30">
             <svg
               width="16"
               height="16"
@@ -249,7 +249,7 @@ export default function MapView({ markers, loadError }: Props) {
           </div>
 
           {searchFocused && searchResults.length > 0 && (
-            <div className="scroll-thin absolute mt-2 max-h-80 w-full overflow-y-auto rounded-md border border-white/10 bg-base-900/95 py-1 shadow-2xl backdrop-blur-md">
+            <div className="scroll-thin absolute mt-1.5 max-h-80 w-full overflow-y-auto rounded-[2px] border border-white/12 bg-base-900/95 py-1 shadow-2xl backdrop-blur-md">
               {searchResults.map((m) => (
                 <button
                   key={m.id}
@@ -270,10 +270,10 @@ export default function MapView({ markers, loadError }: Props) {
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono text-xs text-accent-bright">
+                    <span className="font-mono text-xs tracking-wide2 text-white/65">
                       {m.iata ?? m.icao}
                     </span>
-                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60">
+                    <span className="rounded-[2px] border border-white/12 px-1.5 py-0.5 font-mono text-[10px] text-white/50">
                       {m.orgCount}
                     </span>
                   </span>

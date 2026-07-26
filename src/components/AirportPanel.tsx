@@ -28,7 +28,7 @@ export default function AirportPanel({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-md text-white/50 transition hover:bg-white/10 hover:text-white"
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[2px] text-white/50 transition hover:bg-white/10 hover:text-white"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path
@@ -42,7 +42,7 @@ export default function AirportPanel({
 
         <div className="flex items-center gap-3">
           {code && (
-            <span className="rounded border border-accent/40 bg-accent/10 px-2 py-1 font-mono text-lg font-semibold tracking-wide2 text-accent-bright">
+            <span className="rounded-[2px] border border-white/20 bg-white/[0.05] px-2 py-1 font-mono text-lg font-medium tracking-wide2 text-white">
               {code}
             </span>
           )}

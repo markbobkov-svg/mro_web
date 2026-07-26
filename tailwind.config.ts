@@ -18,9 +18,9 @@ const config: Config = {
           500: "#2a323d",
         },
         accent: {
-          DEFAULT: "#5b8def", // subtle cold blue
-          bright: "#7fa9ff",
-          glow: "#3a6fd6",
+          DEFAULT: "#5f7183", // muted steel — restrained, not vivid
+          bright: "#9fb0c6", // soft cool grey for highlights
+          glow: "#2b3a4d",
         },
       },
       fontFamily: {

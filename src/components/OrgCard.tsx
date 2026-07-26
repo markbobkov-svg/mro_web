@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import type { OrgAtAirport, AircraftTypeRef } from "@/lib/types";
+import type { OrgAtAirport } from "@/lib/types";
 
-function typeLabel(t: AircraftTypeRef): string {
-  if (t.variant && t.variant !== t.model) return t.variant;
-  return t.model;
-}
+const SCOPE_PREVIEW = 12;
 
-const AIRCRAFT_PREVIEW = 12;
+const SCOPE_STYLE: Record<string, string> = {
+  line: "bg-emerald-400/10 text-emerald-300",
+  base: "bg-amber-400/10 text-amber-300",
+  both: "bg-accent/15 text-accent-bright",
+};
 
 export default function OrgCard({ org }: { org: OrgAtAirport }) {
   const [expanded, setExpanded] = useState(false);
@@ -18,25 +19,15 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
     (a) => a.approvalType !== "Part-145",
   );
 
-  // de-duplicate aircraft labels, keep order
-  const seen = new Set<string>();
-  const labels: string[] = [];
-  for (const t of org.aircraftTypes) {
-    const l = typeLabel(t);
-    if (l && !seen.has(l)) {
-      seen.add(l);
-      labels.push(l);
-    }
-  }
-  const shown = expanded ? labels : labels.slice(0, AIRCRAFT_PREVIEW);
-  const hiddenCount = labels.length - shown.length;
+  const shown = expanded ? org.scope : org.scope.slice(0, SCOPE_PREVIEW);
+  const hiddenCount = org.scope.length - shown.length;
 
   return (
     <div className="group rounded-lg border border-white/10 bg-base-800/70 p-4 transition hover:border-white/20 hover:bg-base-800">
       {/* header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-medium text-white">
+          <h3 className="text-sm font-medium leading-snug text-white">
             {org.name}
           </h3>
           {org.legalName && org.legalName !== org.name && (
@@ -45,16 +36,16 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
             </p>
           )}
         </div>
-        <span
-          className={
-            "shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 " +
-            (org.maintenanceScope === "base"
-              ? "bg-amber-400/10 text-amber-300"
-              : "bg-emerald-400/10 text-emerald-300")
-          }
-        >
-          {org.maintenanceScope}
-        </span>
+        {org.locationScope && (
+          <span
+            className={
+              "shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 " +
+              (SCOPE_STYLE[org.locationScope] ?? "bg-white/10 text-white/60")
+            }
+          >
+            {org.locationScope}
+          </span>
+        )}
       </div>
 
       {/* Part-145 approval */}
@@ -108,19 +99,20 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         </div>
       )}
 
-      {/* aircraft types */}
-      {labels.length > 0 && (
+      {/* scope / aircraft covered here */}
+      {org.scope.length > 0 && (
         <div className="mt-3">
           <p className="mb-1.5 text-[10px] uppercase tracking-wide2 text-white/35">
-            Aircraft
+            Scope at this station
           </p>
           <div className="flex flex-wrap gap-1">
-            {shown.map((l) => (
+            {shown.map((s, i) => (
               <span
-                key={l}
-                className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[11px] text-white/75"
+                key={s + i}
+                className="max-w-full truncate rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-white/75"
+                title={s}
               >
-                {l}
+                {s}
               </span>
             ))}
             {hiddenCount > 0 && (
@@ -135,8 +127,43 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         </div>
       )}
 
-      {/* contact */}
-      {(org.phone || org.email || org.website) && (
+      {/* contacts */}
+      {org.contacts.length > 0 && (
+        <div className="mt-3 space-y-1.5 border-t border-white/5 pt-3">
+          {org.contacts.map((c, i) => (
+            <div key={i} className="text-xs">
+              {(c.label || c.name) && (
+                <p className="text-white/70">
+                  {c.label}
+                  {c.label && c.name ? " · " : ""}
+                  {c.name}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                {c.phone && (
+                  <a
+                    href={`tel:${c.phone.replace(/\s+/g, "")}`}
+                    className="text-white/50 hover:text-white"
+                  >
+                    {c.phone}
+                  </a>
+                )}
+                {c.email && (
+                  <a
+                    href={`mailto:${c.email}`}
+                    className="truncate text-white/50 hover:text-white"
+                  >
+                    {c.email}
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* org-level contact fallback */}
+      {org.contacts.length === 0 && (org.phone || org.email || org.website) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/5 pt-3 text-xs">
           {org.phone && (
             <a
@@ -164,6 +191,20 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
               Website ↗
             </a>
           )}
+        </div>
+      )}
+
+      {/* website when contacts exist */}
+      {org.contacts.length > 0 && org.website && (
+        <div className="mt-2 text-xs">
+          <a
+            href={normaliseUrl(org.website)}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent-bright/80 transition hover:text-accent-bright"
+          >
+            Website ↗
+          </a>
         </div>
       )}
     </div>

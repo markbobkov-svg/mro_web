@@ -137,22 +137,16 @@ export default function MapView({ markers, loadError }: Props) {
         zoomControl: false,
         worldCopyJump: true,
         attributionControl: true,
-        // Smooth, continuous (fractional) zoom rather than integer snaps.
-        zoomSnap: 0,
-        zoomDelta: 0.6,
-        wheelPxPerZoomLevel: 130,
-        wheelDebounceTime: 20,
-        zoomAnimation: true,
-        fadeAnimation: true,
+        // default zoom speed; smoothness comes from the tile options below
       });
       L.tileLayer(TILE_URL, {
         subdomains: "abcd",
         maxZoom: 20,
         attribution: TILE_ATTRIB,
         crossOrigin: true,
-        // Keep a wide ring of tiles and don't thrash them mid-zoom — reduces the
-        // blank/pop-in artifacts while zooming; crisp tiles settle when idle.
-        keepBuffer: 8,
+        // Keep a wide ring of tiles and don't thrash them mid-zoom — removes the
+        // blank/pop-in flicker while zooming; crisp tiles settle once idle.
+        keepBuffer: 6,
         updateWhenZooming: false,
         updateWhenIdle: true,
       }).addTo(map);
@@ -162,7 +156,9 @@ export default function MapView({ markers, loadError }: Props) {
       // Scale the airport points with the zoom level via the --mk CSS variable.
       const applyMarkerScale = () => {
         const z = map.getZoom();
-        const scale = Math.min(2.6, Math.max(0.6, 1 + (z - 4) * 0.2));
+        // Cap at the original size (1×) when zoomed in; shrink below 1× as you
+        // zoom out so the dense clusters stop overlapping.
+        const scale = Math.max(0.4, Math.min(1, 1 - (7 - z) * 0.13));
         mapContainer.current?.style.setProperty("--mk", scale.toFixed(3));
       };
       applyMarkerScale();

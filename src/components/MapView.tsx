@@ -5,9 +5,31 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { AirportMarker, AirportDetail } from "@/lib/types";
 import AirportPanel from "./AirportPanel";
 
-// Free CARTO dark vector basemap — no API token required.
-const MAP_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+// Free CARTO "dark matter" basemap as RASTER tiles — no API token required.
+// Raster (plain PNGs) is far more robust than the vector GL style, which pulls
+// a style.json + vector tiles + glyphs + sprite from several hosts (any one
+// failing leaves a blank map). These tiles are CORS-enabled and public.
+const MAP_STYLE: any = {
+  version: 8,
+  sources: {
+    "carto-dark": {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+    },
+  },
+  layers: [
+    { id: "bg", type: "background", paint: { "background-color": "#0a0e16" } },
+    { id: "carto-dark", type: "raster", source: "carto-dark" },
+  ],
+};
 
 interface Props {
   markers: AirportMarker[];
@@ -141,10 +163,14 @@ export default function MapView({ markers, loadError }: Props) {
       );
       mapRef.current = map;
       map.on("load", () => {
-        if (!cancelled) setReady(true);
+        if (cancelled) return;
+        map.resize(); // guard against a mis-sized container at init
+        setReady(true);
       });
-      // Swallow tile/style network errors so the console stays clean.
-      map.on("error", () => {});
+      // Log tile/style errors (helps diagnose a blank basemap) without crashing.
+      map.on("error", (e: any) => {
+        if (e?.error) console.warn("map error:", e.error?.message || e.error);
+      });
       // Fallback: markers are DOM overlays and don't need the basemap style, so
       // render them even if the style is slow or unreachable (blank dark map is
       // still usable via search + pins).

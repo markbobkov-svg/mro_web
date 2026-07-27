@@ -7,6 +7,9 @@ import {
   createMarkerElement,
   zoomScale,
   PANEL_OFFSET_PX,
+  COVERAGE_BBOX,
+  MAX_ZOOM,
+  MIN_ZOOM,
 } from "@/lib/basemap";
 
 // maplibre-gl + pmtiles + @protomaps/basemaps are loaded from a CDN at runtime
@@ -51,10 +54,6 @@ function tidyLayers(layers: any[]): any[] {
       return l;
     });
 }
-
-// The self-hosted Europe basemap tops out at zoom 13, so cap the map there:
-// with no overzoom, every zoom level renders crisp native tiles.
-const MAX_ZOOM = 13;
 
 interface Libs {
   maplibregl: any;
@@ -208,8 +207,14 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
             },
             center: [10, 50],
             zoom: 4,
-            minZoom: 2,
+            minZoom: MIN_ZOOM,
             maxZoom: MAX_ZOOM,
+            // Keep the view inside the area we actually extracted, so the
+            // uncovered rest of the world never shows as blank.
+            maxBounds: [
+              [COVERAGE_BBOX.west, COVERAGE_BBOX.south],
+              [COVERAGE_BBOX.east, COVERAGE_BBOX.north],
+            ],
             attributionControl: true,
             dragRotate: false,
             pitchWithRotate: false,

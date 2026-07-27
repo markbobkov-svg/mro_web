@@ -69,3 +69,20 @@ export function zoomScale(zoom: number): number {
 }
 
 export const PANEL_OFFSET_PX = 210; // shift focus left of the right-hand panel
+
+/**
+ * Geographic coverage of the self-hosted basemap (the Europe extract on R2), as
+ * [west, south, east, north]. Panning and zoom-out are constrained to this box
+ * so the areas we didn't extract are never visible as blank.
+ */
+export const COVERAGE_BBOX = {
+  west: -32,
+  south: 27,
+  east: 46,
+  north: 72,
+};
+
+/** Max zoom = the extract's deepest level, so there's no overzoom (always crisp). */
+export const MAX_ZOOM = 13;
+/** Min zoom floor; maxBounds further limits zoom-out per screen so no voids show. */
+export const MIN_ZOOM = 3;

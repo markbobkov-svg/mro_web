@@ -14,6 +14,9 @@ import {
   markerParts,
   zoomScale,
   PANEL_OFFSET_PX,
+  COVERAGE_BBOX,
+  MAX_ZOOM,
+  MIN_ZOOM,
 } from "@/lib/basemap";
 
 // CARTO "dark matter" RASTER tiles — plain <img> tiles (no WebGL). Fallback for
@@ -61,11 +64,16 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
         map = L.map(containerRef.current, {
           center: [50, 10],
           zoom: 4,
-          minZoom: 2,
-          maxZoom: 18,
+          minZoom: MIN_ZOOM,
+          maxZoom: MAX_ZOOM,
           zoomControl: false,
-          worldCopyJump: true,
           attributionControl: true,
+          // Match the vector map: keep the view within our coverage area.
+          maxBounds: [
+            [COVERAGE_BBOX.south, COVERAGE_BBOX.west],
+            [COVERAGE_BBOX.north, COVERAGE_BBOX.east],
+          ],
+          maxBoundsViscosity: 1,
         });
         L.tileLayer(TILE_URL, {
           subdomains: "abcd",

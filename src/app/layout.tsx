@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "MRO FINDER — Part-145 Line Maintenance in Europe",
+  title: "ONE4FIVE — Part-145 MRO across Europe",
   description:
     "Find Part-145 approved maintenance organisations across European airports. Built for airlines and aircraft operators.",
 };

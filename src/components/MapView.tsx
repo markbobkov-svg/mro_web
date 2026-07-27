@@ -133,10 +133,10 @@ export default function MapView({ markers, loadError }: Props) {
       <div className="absolute left-0 top-0 z-[500] flex w-full max-w-md flex-col gap-4 p-5 sm:p-6">
         <div className="pointer-events-none select-none">
           <h1 className="text-lg font-normal tracking-brand text-white sm:text-xl">
-            MRO&nbsp;FINDER
+            ONE<span className="text-accent-bright">4</span>FIVE
           </h1>
           <p className="mt-1.5 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
-            Part-145 · Line Maintenance · Europe
+            Part-145 · MRO · Europe
           </p>
         </div>
 

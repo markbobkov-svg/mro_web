@@ -21,7 +21,9 @@ const CDN = {
 };
 
 // Protomaps "black" basemap — a very dark vector theme; English labels.
-const PMTILES_URL = "pmtiles://https://demo-bucket.protomaps.com/v4.pmtiles";
+// The PMTiles are served same-origin through our /api/basemap proxy (the
+// Protomaps demo bucket blocks cross-origin browser reads via CORS).
+const PMTILES_PROXY_PATH = "/api/basemap";
 const GLYPHS =
   "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
 const SPRITE = "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
@@ -166,7 +168,11 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
               glyphs: GLYPHS,
               sprite: SPRITE,
               sources: {
-                protomaps: { type: "vector", url: PMTILES_URL, attribution: ATTRIB },
+                protomaps: {
+                  type: "vector",
+                  url: `pmtiles://${window.location.origin}${PMTILES_PROXY_PATH}`,
+                  attribution: ATTRIB,
+                },
               },
               layers: basemaps.layers(
                 "protomaps",

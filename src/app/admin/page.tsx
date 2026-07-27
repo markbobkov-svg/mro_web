@@ -10,8 +10,9 @@ export const metadata = { title: "Review queue — ONE4FIVE" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
+  let admin;
   try {
-    await requireAdmin();
+    admin = await requireAdmin();
   } catch (err) {
     if (err instanceof ForbiddenError) {
       return (
@@ -54,7 +55,7 @@ export default async function AdminPage() {
           <ul className="space-y-3">
             {claims.map((c) => (
               <li key={c.id}>
-                <ClaimReview claim={c} />
+                <ClaimReview claim={c} currentAdminId={admin.id} />
               </li>
             ))}
           </ul>

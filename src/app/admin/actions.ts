@@ -57,6 +57,18 @@ export async function approveClaimAction(
       return { error: "That claim has already been decided." };
     }
 
+    // Whoever filed a claim does not get to wave it through, admin flag or not.
+    // The manual queue exists precisely for the claims the domain check could
+    // not vouch for; letting the applicant sign their own approval would empty
+    // it of meaning. Rejecting your own claim stays allowed — that is just
+    // withdrawing it.
+    if (String(claim.user_id) === admin.id) {
+      return {
+        error:
+          "This is your own claim — another administrator has to decide it.",
+      };
+    }
+
     let organisationId = claim.organisation_id as string | null;
 
     if (claim.kind === "new") {

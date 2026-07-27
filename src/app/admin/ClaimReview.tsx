@@ -9,12 +9,20 @@ import { Alert, SubmitButton, Textarea } from "@/components/ui/Form";
 
 const EMPTY: AdminState = {};
 
-export function ClaimReview({ claim }: { claim: ClaimRow }) {
+export function ClaimReview({
+  claim,
+  currentAdminId,
+}: {
+  claim: ClaimRow;
+  currentAdminId: string;
+}) {
   const [approveState, approve] = useFormState(approveClaimAction, EMPTY);
   const [rejectState, reject] = useFormState(rejectClaimAction, EMPTY);
   const [note, setNote] = useState("");
 
   const isNew = claim.kind === "new";
+  // The server refuses this too — hiding the button just saves a pointless click.
+  const isOwnClaim = claim.userId === currentAdminId;
 
   return (
     <div className="rounded-xl border border-base-600 bg-base-800 p-5">
@@ -78,13 +86,20 @@ export function ClaimReview({ claim }: { claim: ClaimRow }) {
           placeholder="Note — shown to the applicant. Required when rejecting."
         />
         <div className="flex flex-wrap gap-2">
-          <form action={approve}>
-            <input type="hidden" name="claimId" value={claim.id} />
-            <input type="hidden" name="reviewNote" value={note} />
-            <SubmitButton pendingLabel="Approving…">
-              {isNew ? "Create and grant access" : "Approve"}
-            </SubmitButton>
-          </form>
+          {isOwnClaim ? (
+            <p className="rounded-md border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+              This is your own claim — another administrator has to approve it.
+              You can still reject it to withdraw.
+            </p>
+          ) : (
+            <form action={approve}>
+              <input type="hidden" name="claimId" value={claim.id} />
+              <input type="hidden" name="reviewNote" value={note} />
+              <SubmitButton pendingLabel="Approving…">
+                {isNew ? "Create and grant access" : "Approve"}
+              </SubmitButton>
+            </form>
+          )}
           <form action={reject}>
             <input type="hidden" name="claimId" value={claim.id} />
             <input type="hidden" name="reviewNote" value={note} />

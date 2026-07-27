@@ -13,7 +13,7 @@ import {
   BasemapProps,
   markerParts,
   zoomScale,
-  PANEL_OFFSET_PX,
+  panelOffsetPx,
   COVERAGE_BBOX,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -42,11 +42,11 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
         if (!map) return;
         const [lng, lat] = m.coordinates;
         const targetZoom = Math.max(map.getZoom(), 8);
+        const off =
+          typeof window !== "undefined" ? panelOffsetPx(window.innerWidth) : 0;
         let center: any = [lat, lng];
-        if (typeof window !== "undefined" && window.innerWidth >= 640) {
-          const pt = map
-            .project([lat, lng], targetZoom)
-            .subtract([PANEL_OFFSET_PX, 0]);
+        if (off > 0) {
+          const pt = map.project([lat, lng], targetZoom).subtract([off, 0]);
           center = map.unproject(pt, targetZoom);
         }
         map.flyTo(center, targetZoom, { duration: 0.8 });

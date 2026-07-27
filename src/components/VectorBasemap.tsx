@@ -6,7 +6,7 @@ import {
   BasemapProps,
   createMarkerElement,
   zoomScale,
-  PANEL_OFFSET_PX,
+  panelOffsetPx,
   COVERAGE_BBOX,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -129,11 +129,12 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
         const map = mapRef.current;
         if (!map) return;
         const [lng, lat] = m.coordinates;
-        const wide = typeof window !== "undefined" && window.innerWidth >= 640;
+        const off =
+          typeof window !== "undefined" ? panelOffsetPx(window.innerWidth) : 0;
         map.flyTo({
           center: [lng, lat],
           zoom: Math.max(map.getZoom(), 8),
-          offset: wide ? [-PANEL_OFFSET_PX, 0] : [0, 0],
+          offset: [-off, 0],
           duration: 900,
           essential: true,
         });

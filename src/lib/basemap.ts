@@ -68,7 +68,14 @@ export function zoomScale(zoom: number): number {
   return Math.max(0.4, Math.min(1, 1 - (7 - zoom) * 0.13));
 }
 
-export const PANEL_OFFSET_PX = 210; // shift focus left of the right-hand panel
+// How far (px) to shift the focused airport left of centre so it sits in the
+// visible map area, not under the right-hand panel. Roughly half the panel
+// width at each breakpoint (panel: full width < 640, 420px ≥ 640, 630px ≥ 768).
+export function panelOffsetPx(viewportWidth: number): number {
+  if (viewportWidth >= 768) return 315;
+  if (viewportWidth >= 640) return 210;
+  return 0; // panel is full-screen on mobile — don't shift
+}
 
 /**
  * Geographic coverage of the self-hosted basemap (the Europe extract on R2), as

@@ -85,7 +85,12 @@ export interface SearchHit {
   name: string;
   city: string | null;
   countryCode: string | null;
+  /** Organisations at this airport that satisfy the query. */
   orgCount: number;
+  /** Total organisations at this airport, before the query narrowed them. */
+  totalOrgCount: number;
+  /** Ids of the matching organisations — used to filter the airport panel. */
+  matchedOrgIds: string[];
   /** Organisations at this airport whose name matched the query. */
   matchedOrgs: string[];
   /** Scope lines (aircraft, engines, …) that matched the query. */

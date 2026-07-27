@@ -27,6 +27,10 @@ export default function MapView({ markers, loadError }: Props) {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [serverResults, setServerResults] = useState<SearchHit[] | null>(null);
+  const [orgFilter, setOrgFilter] = useState<{
+    orgIds: string[];
+    label: string;
+  } | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
 
   // pick the engine on the client (vector needs WebGL; raster works everywhere)
@@ -83,6 +87,8 @@ export default function MapView({ markers, loadError }: Props) {
         city: m.city,
         countryCode: m.countryCode,
         orgCount: m.orgCount,
+        totalOrgCount: m.orgCount,
+        matchedOrgIds: [],
         matchedOrgs: [],
         matchedScope: [],
       }));
@@ -154,9 +160,12 @@ export default function MapView({ markers, loadError }: Props) {
   }, []);
 
   const selectAirport = useCallback(
-    (id: string) => {
+    (id: string, filter?: { orgIds: string[]; label: string } | null) => {
       activeIdRef.current = id;
       setActiveId(id);
+      // picking a pin off the map shows everything; picking a search result
+      // carries the query through as a filter on the organisations
+      setOrgFilter(filter?.orgIds.length ? filter : null);
       const m = markers.find((x) => x.id === id);
       if (m) basemapRef.current?.flyTo(m);
       loadDetail(id);
@@ -169,6 +178,7 @@ export default function MapView({ markers, loadError }: Props) {
     setActiveId(null);
     setDetail(null);
     setDetailError(null);
+    setOrgFilter(null);
   }, []);
 
   const onVectorFail = useCallback(() => setEngine("raster"), []);
@@ -284,8 +294,9 @@ export default function MapView({ markers, loadError }: Props) {
                   key={m.id}
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    const label = search.trim();
                     setSearch("");
-                    selectAirport(m.id);
+                    selectAirport(m.id, { orgIds: m.matchedOrgIds, label });
                   }}
                   className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-white/5"
                 >
@@ -313,8 +324,17 @@ export default function MapView({ markers, loadError }: Props) {
                     <span className="font-mono text-xs text-accent-bright">
                       {m.iata ?? m.icao}
                     </span>
-                    <span className="rounded-[2px] bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60">
-                      {m.orgCount}
+                    <span
+                      className="rounded-[2px] bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60"
+                      title={
+                        m.orgCount < m.totalOrgCount
+                          ? `${m.orgCount} of ${m.totalOrgCount} organisations match`
+                          : `${m.orgCount} organisations`
+                      }
+                    >
+                      {m.orgCount < m.totalOrgCount
+                        ? `${m.orgCount}/${m.totalOrgCount}`
+                        : m.orgCount}
                     </span>
                   </span>
                 </button>
@@ -356,6 +376,8 @@ export default function MapView({ markers, loadError }: Props) {
           detail={detail}
           loading={loadingDetail}
           error={detailError}
+          orgFilter={orgFilter}
+          onClearFilter={() => setOrgFilter(null)}
           onClose={closePanel}
         />
       )}

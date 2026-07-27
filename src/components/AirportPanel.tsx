@@ -9,6 +9,9 @@ interface Props {
   loading: boolean;
   error: string | null;
   onClose: () => void;
+  /** Narrows the list to the organisations that matched the search query. */
+  orgFilter?: { orgIds: string[]; label: string } | null;
+  onClearFilter?: () => void;
 }
 
 export default function AirportPanel({
@@ -17,9 +20,17 @@ export default function AirportPanel({
   loading,
   error,
   onClose,
+  orgFilter,
+  onClearFilter,
 }: Props) {
   const code = marker.iata ?? marker.icao ?? "";
-  const orgs = detail?.organisations ?? [];
+  const allOrgs = detail?.organisations ?? [];
+  const filtered = orgFilter
+    ? allOrgs.filter((o) => orgFilter.orgIds.includes(o.organisationId))
+    : allOrgs;
+  // if the filter matches nothing here (stale ids), fall back to the full list
+  const orgs = orgFilter && filtered.length === 0 ? allOrgs : filtered;
+  const filterActive = Boolean(orgFilter) && orgs.length < allOrgs.length;
 
   return (
     <aside className="animate-slide-in absolute right-0 top-0 z-[700] flex h-full w-full flex-col border-l border-white/10 bg-[#141414]/95 backdrop-blur-xl sm:w-[420px] md:w-[630px]">
@@ -82,10 +93,36 @@ export default function AirportPanel({
 
         {!loading && !error && orgs.length > 0 && (
           <>
-            <p className="px-2 pb-3 pt-1 text-[11px] uppercase tracking-wide2 text-white/40">
-              {orgs.length}{" "}
-              {orgs.length === 1 ? "organisation" : "organisations"}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2 pb-3 pt-1">
+              <p className="text-[11px] uppercase tracking-wide2 text-white/40">
+                {filterActive ? (
+                  <>
+                    <span className="text-white/70">{orgs.length}</span> of{" "}
+                    {allOrgs.length}{" "}
+                    {allOrgs.length === 1 ? "organisation" : "organisations"}
+                  </>
+                ) : (
+                  <>
+                    {orgs.length}{" "}
+                    {orgs.length === 1 ? "organisation" : "organisations"}
+                  </>
+                )}
+              </p>
+              {filterActive && orgFilter && (
+                <button
+                  onClick={onClearFilter}
+                  title="Show all organisations at this airport"
+                  className="group flex items-center gap-1 rounded-[2px] bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent-bright transition hover:bg-accent/25"
+                >
+                  <span className="max-w-[10rem] truncate">
+                    {orgFilter.label}
+                  </span>
+                  <span className="text-accent-bright/60 group-hover:text-accent-bright">
+                    ✕
+                  </span>
+                </button>
+              )}
+            </div>
             <div className="flex flex-col">
               {orgs.map((org, i) => (
                 <div key={org.stationId}>

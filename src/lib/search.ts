@@ -174,10 +174,13 @@ function getIndex(): Promise<Index> {
 }
 
 /**
- * Every token of the query must match somewhere — the airport itself, an
- * organisation's name, or its certified scope — but the tokens may match in
- * different places. That makes multi-word queries like "boeing 737 amsterdam"
- * or "lufthansa engines" work, which a plain substring match cannot do.
+ * The query works as a filter, not just a lookup.
+ *
+ * Tokens that the airport itself satisfies (its name, city or code) select the
+ * airport; the remaining tokens must all be satisfied by one and the same
+ * organisation there. So "737 TLL" returns Tallinn with only the organisations
+ * that hold a 737 rating — not everything based at TLL — and "737 cfm56" wants
+ * a single organisation covering both.
  */
 export async function searchAirports(
   query: string,
@@ -188,56 +191,54 @@ export async function searchAirports(
 
   const { airports, orgs } = await getIndex();
 
-  // per token: which organisations match it (by name or by scope)
-  const orgMatchPerToken = tokens.map((t) => {
-    const set = new Set<string>();
-    for (const org of orgs.values()) {
-      if (org.nameText.includes(t) || org.scopeText.includes(t)) set.add(org.id);
-    }
-    return set;
-  });
+  const orgMatches = (id: string, t: string) => {
+    const org = orgs.get(id);
+    return !!org && (org.nameText.includes(t) || org.scopeText.includes(t));
+  };
 
-  const hits: { doc: AirportDoc; score: number }[] = [];
+  const hits: { doc: AirportDoc; score: number; matchedOrgIds: string[] }[] = [];
   for (const doc of airports) {
-    let ok = true;
-    let score = 0;
-    for (let i = 0; i < tokens.length; i++) {
-      const t = tokens[i];
-      const inAirport = doc.own.includes(t);
-      // an organisation at this airport matching the token also counts
-      const orgSet = orgMatchPerToken[i];
-      const inOrg = !inAirport && doc.orgIds.some((id) => orgSet.has(id));
-      if (!inAirport && !inOrg) {
-        ok = false;
-        break;
-      }
-      // airport-level matches rank above organisation-level ones
-      if (inAirport) score += 10;
-      // exact code match is the strongest signal
+    const airportTokens = tokens.filter((t) => doc.own.includes(t));
+    const orgTokens = tokens.filter((t) => !doc.own.includes(t));
+
+    // organisations here that satisfy every token the airport didn't
+    const matchedOrgIds =
+      orgTokens.length === 0
+        ? doc.orgIds
+        : doc.orgIds.filter((id) => orgTokens.every((t) => orgMatches(id, t)));
+    if (matchedOrgIds.length === 0) continue;
+
+    let score = airportTokens.length * 10;
+    for (const t of airportTokens) {
+      // an exact code match is the strongest signal
       if (doc.iata?.toLowerCase() === t || doc.icao?.toLowerCase() === t) {
         score += 100;
       }
     }
-    if (ok) hits.push({ doc, score });
+    hits.push({ doc, score, matchedOrgIds });
   }
 
   hits.sort(
-    (a, b) => b.score - a.score || b.doc.orgIds.length - a.doc.orgIds.length,
+    (a, b) => b.score - a.score || b.matchedOrgIds.length - a.matchedOrgIds.length,
   );
 
-  return hits.slice(0, limit).map(({ doc }) => {
+  return hits.slice(0, limit).map(({ doc, matchedOrgIds }) => {
+    const orgTokens = tokens.filter((t) => !doc.own.includes(t));
     const matchedOrgs: string[] = [];
     const matchedScope: string[] = [];
-    for (const id of doc.orgIds) {
+    for (const id of matchedOrgIds) {
       const org = orgs.get(id);
       if (!org) continue;
-      if (tokens.some((t) => org.nameText.includes(t))) {
-        if (matchedOrgs.length < 3) matchedOrgs.push(org.name);
+      if (
+        matchedOrgs.length < 3 &&
+        orgTokens.some((t) => org.nameText.includes(t))
+      ) {
+        matchedOrgs.push(org.name);
       }
       if (matchedScope.length < 3) {
         for (const line of org.scope) {
           const low = line.toLowerCase();
-          if (tokens.some((t) => low.includes(t) && !doc.own.includes(t))) {
+          if (orgTokens.some((t) => low.includes(t))) {
             if (!matchedScope.includes(line)) matchedScope.push(line);
             if (matchedScope.length >= 3) break;
           }
@@ -251,7 +252,9 @@ export async function searchAirports(
       name: doc.name,
       city: doc.city,
       countryCode: doc.countryCode,
-      orgCount: doc.orgIds.length,
+      orgCount: matchedOrgIds.length,
+      totalOrgCount: doc.orgIds.length,
+      matchedOrgIds: orgTokens.length === 0 ? [] : matchedOrgIds,
       matchedOrgs,
       matchedScope,
     };

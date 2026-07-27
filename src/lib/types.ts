@@ -17,12 +17,29 @@ export interface AirportMarker {
   orgCount: number;
 }
 
-export interface Approval {
+/** One approval certificate issued by a single authority. */
+export interface Certificate {
   approvalType: string; // 'Part-145', 'Part-CAMO', ...
-  approvalReference: string | null; // e.g. 'DE.145.0123'
-  ratings: string[]; // EASA classes if captured, e.g. ['A1','B1']
+  reference: string | null; // e.g. 'DE.145.0123'
+  ratings: string[]; // clean EASA classes on the certificate, e.g. ['A1','B1']
   validUntil: string | null;
-  authorityCode: string | null; // 'EASA', 'UK-CAA', ...
+  url: string | null; // link to the certificate / source document, if known
+}
+
+/** A class rating group (e.g. 'A1' or 'Aircraft') and the scope it covers. */
+export interface ScopeClass {
+  label: string;
+  items: string[];
+}
+
+/** All of an organisation's approvals + scope under one authority. */
+export interface AuthorityGroup {
+  code: string; // 'EASA', 'FAA', 'UK-CAA', ...
+  name: string | null;
+  isEasa: boolean;
+  certificates: Certificate[];
+  classes: ScopeClass[]; // scope grouped by class; clickable in the UI
+  url: string | null; // representative certificate link for this authority
 }
 
 export interface Contact {
@@ -46,9 +63,8 @@ export interface OrgAtAirport {
   phone: string | null;
   email: string | null;
   website: string | null;
-  approvals: Approval[];
-  /** Capabilities / aircraft this org covers at THIS station (scope_text). */
-  scope: string[];
+  /** Approvals + scope grouped by authority, EASA first (the default view). */
+  authorities: AuthorityGroup[];
   contacts: Contact[];
 }
 

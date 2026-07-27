@@ -1,30 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { OrgAtAirport } from "@/lib/types";
 
-const SCOPE_PREVIEW = 12;
+const SCOPE_PREVIEW = 14;
 
-const SCOPE_STYLE: Record<string, string> = {
+const LOCATION_STYLE: Record<string, string> = {
   line: "bg-emerald-400/10 text-emerald-300",
   base: "bg-amber-400/10 text-amber-300",
   both: "bg-accent/15 text-accent-bright",
 };
 
+// Ratings printed as small badges next to a certificate — only the short, clean
+// EASA codes (A1, B1, C4, D1…); long descriptive ratings live in the scope list.
+function ratingBadges(ratings: string[]): string[] {
+  return ratings.filter((r) => r && r.trim().length <= 5);
+}
+
 export default function OrgCard({ org }: { org: OrgAtAirport }) {
+  const [authIdx, setAuthIdx] = useState(0);
+  const [cls, setCls] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  const part145 = org.approvals.find((a) => a.approvalType === "Part-145");
-  const otherApprovals = org.approvals.filter(
-    (a) => a.approvalType !== "Part-145",
-  );
+  const authorities = org.authorities;
+  const auth = authorities[Math.min(authIdx, authorities.length - 1)] ?? null;
 
-  const shown = expanded ? org.scope : org.scope.slice(0, SCOPE_PREVIEW);
-  const hiddenCount = org.scope.length - shown.length;
+  const selectAuthority = (i: number) => {
+    setAuthIdx(i);
+    setCls(null);
+    setExpanded(false);
+  };
+  const selectClass = (label: string | null) => {
+    setCls(label);
+    setExpanded(false);
+  };
+
+  // scope items for the current authority + class selection
+  const items = useMemo(() => {
+    if (!auth) return [];
+    const groups = cls
+      ? auth.classes.filter((c) => c.label === cls)
+      : auth.classes;
+    return groups.flatMap((c) => c.items);
+  }, [auth, cls]);
+
+  const shown = expanded ? items : items.slice(0, SCOPE_PREVIEW);
+  const hiddenCount = items.length - shown.length;
 
   return (
     <div className="group rounded-[2px] border border-white/10 bg-base-800/70 p-4 transition hover:border-white/20 hover:bg-base-800">
-      {/* header row */}
+      {/* header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-medium leading-snug text-white">
@@ -40,7 +65,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
           <span
             className={
               "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 " +
-              (SCOPE_STYLE[org.locationScope] ?? "bg-white/10 text-white/60")
+              (LOCATION_STYLE[org.locationScope] ?? "bg-white/10 text-white/60")
             }
           >
             {org.locationScope}
@@ -48,82 +73,143 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         )}
       </div>
 
-      {/* Part-145 approval */}
-      {part145 ? (
-        <div className="mt-3 rounded-[2px] border border-accent/25 bg-accent/[0.06] px-3 py-2">
+      {authorities.length === 0 && (
+        <p className="mt-3 text-xs text-white/30">No approval details.</p>
+      )}
+
+      {/* authority switcher — shown only when the org has more than one */}
+      {authorities.length > 1 && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {authorities.map((a, i) => {
+            const active = i === authIdx;
+            return (
+              <button
+                key={a.code + i}
+                onClick={() => selectAuthority(i)}
+                title={a.name ?? a.code}
+                className={
+                  "rounded-[2px] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide2 transition " +
+                  (active
+                    ? "bg-accent/20 text-accent-bright ring-1 ring-accent/40"
+                    : "bg-white/[0.05] text-white/50 hover:bg-white/10 hover:text-white/80")
+                }
+              >
+                {a.code}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* selected authority: certificates + scope */}
+      {auth && (
+        <div className="mt-3 rounded-[2px] border border-accent/25 bg-accent/[0.06] px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide2 text-accent-bright">
-              Part-145
-            </span>
-            {part145.authorityCode && (
-              <span className="text-[10px] uppercase tracking-wide2 text-white/35">
-                {part145.authorityCode}
-              </span>
-            )}
-          </div>
-          {part145.approvalReference && (
-            <p className="mt-1 font-mono text-xs text-white/80">
-              {part145.approvalReference}
-            </p>
-          )}
-          {part145.ratings.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {part145.ratings.map((r) => (
-                <span
-                  key={r}
-                  className="rounded-[2px] bg-white/[0.07] px-1.5 py-0.5 font-mono text-[10px] text-white/70"
-                >
-                  {r}
+              {auth.isEasa ? "EASA" : auth.code}
+              {auth.name && auth.name !== auth.code ? (
+                <span className="ml-1.5 font-normal normal-case tracking-normal text-white/40">
+                  {auth.name}
                 </span>
-              ))}
+              ) : null}
+            </span>
+          </div>
+
+          {/* certificate references under this authority */}
+          <div className="mt-2 space-y-2">
+            {auth.certificates.map((c, i) => {
+              const badges = ratingBadges(c.ratings);
+              const url = c.url ?? auth.url;
+              return (
+                <div key={i} className="border-t border-white/5 pt-2 first:border-0 first:pt-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[9px] font-semibold uppercase tracking-wide2 text-white/45">
+                      {c.approvalType}
+                    </span>
+                    {c.reference && (
+                      <span className="font-mono text-xs text-white/85">
+                        {c.reference}
+                      </span>
+                    )}
+                    {c.validUntil && (
+                      <span className="text-[10px] text-white/35">
+                        · valid to {c.validUntil}
+                      </span>
+                    )}
+                    {url && (
+                      <a
+                        href={normaliseUrl(url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-auto shrink-0 text-[11px] text-accent-bright/90 transition hover:text-accent-bright"
+                      >
+                        Certificate ↗
+                      </a>
+                    )}
+                  </div>
+                  {badges.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {badges.map((r) => (
+                        <span
+                          key={r}
+                          className="rounded-[2px] bg-white/[0.07] px-1.5 py-0.5 font-mono text-[10px] text-white/70"
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* scope, filterable by class */}
+          {auth.classes.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-1.5 text-[10px] uppercase tracking-wide2 text-white/35">
+                Scope
+              </p>
+              {/* class filter chips */}
+              <div className="mb-2 flex flex-wrap gap-1">
+                <ClassChip
+                  label="All"
+                  count={auth.classes.reduce((n, c) => n + c.items.length, 0)}
+                  active={cls === null}
+                  onClick={() => selectClass(null)}
+                />
+                {auth.classes.map((c) => (
+                  <ClassChip
+                    key={c.label}
+                    label={c.label}
+                    count={c.items.length}
+                    active={cls === c.label}
+                    onClick={() => selectClass(c.label)}
+                  />
+                ))}
+              </div>
+              {/* scope items */}
+              <div className="flex flex-wrap gap-1">
+                {shown.map((s, i) => (
+                  <span
+                    key={s + i}
+                    className="max-w-full truncate rounded-[2px] bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-white/75"
+                    title={s}
+                  >
+                    {s}
+                  </span>
+                ))}
+                {hiddenCount > 0 && (
+                  <button
+                    onClick={() => setExpanded(true)}
+                    className="rounded-[2px] bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-accent-bright hover:bg-white/[0.08]"
+                  >
+                    +{hiddenCount} more
+                  </button>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      ) : (
-        org.approvals.length === 0 && (
-          <p className="mt-3 text-xs text-white/30">No approval details.</p>
-        )
-      )}
-
-      {/* other approvals */}
-      {otherApprovals.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {otherApprovals.map((a, i) => (
-            <span
-              key={a.approvalType + i}
-              className="rounded-[2px] border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-white/45"
-            >
-              {a.approvalType.replace(/^Part-/, "")}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* scope / aircraft covered here */}
-      {org.scope.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1.5 text-[10px] uppercase tracking-wide2 text-white/35">
-            Scope at this station
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {shown.map((s, i) => (
-              <span
-                key={s + i}
-                className="max-w-full truncate rounded-[2px] bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-white/75"
-                title={s}
-              >
-                {s}
-              </span>
-            ))}
-            {hiddenCount > 0 && (
-              <button
-                onClick={() => setExpanded(true)}
-                className="rounded-[2px] bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-accent-bright hover:bg-white/[0.08]"
-              >
-                +{hiddenCount} more
-              </button>
-            )}
-          </div>
         </div>
       )}
 
@@ -208,6 +294,36 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ClassChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={
+        "max-w-[12rem] truncate rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition " +
+        (active
+          ? "bg-accent/20 text-accent-bright ring-1 ring-accent/40"
+          : "bg-white/[0.05] text-white/55 hover:bg-white/10 hover:text-white/85")
+      }
+    >
+      {label}
+      <span className={active ? "ml-1 text-accent-bright/70" : "ml-1 text-white/35"}>
+        {count}
+      </span>
+    </button>
   );
 }
 

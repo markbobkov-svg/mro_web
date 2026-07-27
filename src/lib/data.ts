@@ -6,7 +6,9 @@ import type {
   AirportMarker,
   AirportDetail,
   OrgAtAirport,
-  Approval,
+  AuthorityGroup,
+  Certificate,
+  ScopeClass,
   Contact,
 } from "./types";
 
@@ -87,6 +89,32 @@ function approvalRank(type: string): number {
   return i === -1 ? 99 : i;
 }
 
+// Canonical EASA Part-145 class order, so scope groups sort A1, A2 … B1 … D1.
+// Descriptive / foreign labels ('Aircraft', 'Engines', 'REPAIR STATION') aren't
+// in the list and sort after, alphabetically.
+const EASA_CLASSES = [
+  "A1", "A2", "A3", "A4",
+  "B1", "B2", "B3",
+  ...Array.from({ length: 22 }, (_, i) => `C${i + 1}`),
+  "D1",
+];
+function classRank(label: string): number {
+  const head = label.trim().toUpperCase().split(/[\s.]/)[0];
+  const i = EASA_CLASSES.indexOf(head);
+  return i === -1 ? 999 : i;
+}
+
+// Scope text often repeats the class as a leading token, e.g.
+// "A1.A1 Jet engine.Boeing B737…" under class "A1". Drop that duplicate prefix.
+function cleanScopeText(text: string, cls: string): string {
+  const t = text.trim();
+  const dot = t.indexOf(".");
+  if (dot > 0 && t.slice(0, dot).trim().toUpperCase() === cls.trim().toUpperCase()) {
+    return t.slice(dot + 1).trim();
+  }
+  return t;
+}
+
 /** Collapse a station's location_scope rows to one label. */
 function deriveLocationScope(values: (string | null)[]): string | null {
   const set = new Set(values.filter(Boolean) as string[]);
@@ -95,9 +123,30 @@ function deriveLocationScope(values: (string | null)[]): string | null {
   return [...set][0];
 }
 
+/** All org-level scope rows for a set of orgs (paginated — big MROs have many). */
+async function fetchOrgScope(supabase: any, orgIds: string[]): Promise<any[]> {
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("organisation_scope")
+      .select(
+        "organisation_id, authority_id, organisation_approval_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, source_url",
+      )
+      .in("organisation_id", orgIds)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`getAirportDetail(org_scope): ${error.message}`);
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows;
+}
+
 /**
- * Every MRO present at one airport (via its station there), with the org's
- * approvals, the scope/aircraft it covers at that station, and contacts.
+ * Every MRO present at one airport (via its station there). For each org we
+ * return its approvals + certified scope grouped by authority (EASA first), so
+ * the card can default to EASA scope, let the user switch authorities, and
+ * filter the scope by class rating.
  */
 export async function getAirportDetail(
   airportId: string,
@@ -136,34 +185,38 @@ export async function getAirportDetail(
   const orgIds = uniq(stationRows.map((s) => s.organisation_id).filter(Boolean));
   const stationIds = stationRows.map((s) => s.id);
 
-  const [orgsRes, apprRes, scopeRes, contactsRes] = await Promise.all([
-    supabase
-      .from("organisations")
-      .select("id, name, legal_name, address, country_code, phone, email, website")
-      .in("id", orgIds),
-    supabase
-      .from("organisation_approvals")
-      .select(
-        "organisation_id, approval_type, approval_reference, ratings, valid_until, authorities(code, name)",
-      )
-      .in("organisation_id", orgIds),
-    supabase
-      .from("organisation_station_scope")
-      .select("station_id, scope_text, scope_text_en, location_scope")
-      .in("station_id", stationIds),
-    supabase
-      .from("organisation_contacts")
-      .select(
-        "organisation_id, label, name, phone, email, hours, station_iata, station_icao",
-      )
-      .in("organisation_id", orgIds),
-  ]);
+  const [orgsRes, apprRes, scopeRows, stationScopeRes, contactsRes, authRes] =
+    await Promise.all([
+      supabase
+        .from("organisations")
+        .select("id, name, legal_name, address, country_code, phone, email, website")
+        .in("id", orgIds),
+      supabase
+        .from("organisation_approvals")
+        .select(
+          "id, organisation_id, approval_type, approval_reference, ratings, valid_until, authority_id, authorities(code, name)",
+        )
+        .in("organisation_id", orgIds),
+      fetchOrgScope(supabase, orgIds),
+      supabase
+        .from("organisation_station_scope")
+        .select("station_id, location_scope")
+        .in("station_id", stationIds),
+      supabase
+        .from("organisation_contacts")
+        .select(
+          "organisation_id, label, name, phone, email, hours, station_iata, station_icao",
+        )
+        .in("organisation_id", orgIds),
+      supabase.from("authorities").select("id, code, name"),
+    ]);
 
   for (const [label, res] of [
     ["organisations", orgsRes],
     ["approvals", apprRes],
-    ["station_scope", scopeRes],
+    ["station_scope", stationScopeRes],
     ["contacts", contactsRes],
+    ["authorities", authRes],
   ] as const) {
     if (res.error) throw new Error(`getAirportDetail(${label}): ${res.error.message}`);
   }
@@ -171,26 +224,72 @@ export async function getAirportDetail(
   const orgById = new Map<string, any>();
   for (const o of (orgsRes.data as any[]) ?? []) orgById.set(o.id, o);
 
-  const approvalsByOrg = new Map<string, Approval[]>();
-  for (const ap of (apprRes.data as any[]) ?? []) {
-    const list = approvalsByOrg.get(ap.organisation_id) ?? [];
-    list.push({
-      approvalType: ap.approval_type,
-      approvalReference: ap.approval_reference ?? null,
-      ratings: Array.isArray(ap.ratings) ? ap.ratings : [],
-      validUntil: ap.valid_until ?? null,
-      authorityCode: ap.authorities?.code ?? null,
-    });
-    approvalsByOrg.set(ap.organisation_id, list);
+  // authority id -> { code, name }
+  const authById = new Map<string, { code: string; name: string | null }>();
+  for (const a of (authRes.data as any[]) ?? []) {
+    authById.set(a.id, { code: a.code, name: a.name ?? null });
   }
 
-  const scopeByStation = new Map<string, { texts: string[]; scopes: (string | null)[] }>();
-  for (const sc of (scopeRes.data as any[]) ?? []) {
-    const entry = scopeByStation.get(sc.station_id) ?? { texts: [], scopes: [] };
+  const AUTH_NONE = "∅";
+
+  // --- org-level scope: group org -> authority -> class -> items; collect cert links ---
+  // Classes are keyed case-insensitively so scraped variants like
+  // "Components…" and "COMPONENTS…" collapse into one group (first label wins).
+  type ClassGroup = { label: string; items: Set<string> };
+  const scopeByOrgAuth = new Map<
+    string,
+    Map<string, Map<string, ClassGroup>>
+  >();
+  const urlByApproval = new Map<string, string>(); // organisation_approval_id -> source_url
+  const urlByOrgAuth = new Map<string, string>(); // `${org}|${auth}` -> source_url
+  for (const sc of scopeRows) {
+    const org = sc.organisation_id;
+    const auth = sc.authority_id ?? AUTH_NONE;
+    const cls = (sc.rating_class_text_en || sc.rating_class_text || "Other").trim() || "Other";
     const text = (sc.scope_text_en || sc.scope_text || "").trim();
-    if (text) entry.texts.push(text);
-    entry.scopes.push(sc.location_scope ?? null);
-    scopeByStation.set(sc.station_id, entry);
+    if (text) {
+      const clsKey = cls.toLowerCase();
+      let am = scopeByOrgAuth.get(org);
+      if (!am) { am = new Map(); scopeByOrgAuth.set(org, am); }
+      let cm = am.get(auth);
+      if (!cm) { cm = new Map(); am.set(auth, cm); }
+      let grp = cm.get(clsKey);
+      if (!grp) { grp = { label: cls, items: new Set() }; cm.set(clsKey, grp); }
+      grp.items.add(cleanScopeText(text, cls));
+    }
+    if (sc.source_url) {
+      if (sc.organisation_approval_id && !urlByApproval.has(sc.organisation_approval_id)) {
+        urlByApproval.set(sc.organisation_approval_id, sc.source_url);
+      }
+      const k = `${org}|${auth}`;
+      if (!urlByOrgAuth.has(k)) urlByOrgAuth.set(k, sc.source_url);
+    }
+  }
+
+  // --- approvals: group org -> authority -> certificates[] ---
+  const certsByOrgAuth = new Map<string, Map<string, Certificate[]>>();
+  for (const ap of (apprRes.data as any[]) ?? []) {
+    const org = ap.organisation_id;
+    const auth = ap.authority_id ?? AUTH_NONE;
+    // authorities may arrive as embedded object; keep its code as a fallback
+    if (ap.authority_id && !authById.has(ap.authority_id) && ap.authorities?.code) {
+      authById.set(ap.authority_id, {
+        code: ap.authorities.code,
+        name: ap.authorities.name ?? null,
+      });
+    }
+    const cert: Certificate = {
+      approvalType: ap.approval_type,
+      reference: ap.approval_reference ?? null,
+      ratings: Array.isArray(ap.ratings) ? ap.ratings : [],
+      validUntil: ap.valid_until ?? null,
+      url: (ap.id && urlByApproval.get(ap.id)) || null,
+    };
+    let am = certsByOrgAuth.get(org);
+    if (!am) { am = new Map(); certsByOrgAuth.set(org, am); }
+    const list = am.get(auth) ?? [];
+    list.push(cert);
+    am.set(auth, list);
   }
 
   const iata = airportInfo.iata?.toUpperCase();
@@ -201,8 +300,7 @@ export async function getAirportDetail(
     const cIata = (c.station_iata || "").toUpperCase();
     const cIcao = (c.station_icao || "").toUpperCase();
     const stationSpecific = cIata || cIcao;
-    const matchesAirport =
-      (iata && cIata === iata) || (icao && cIcao === icao);
+    const matchesAirport = (iata && cIata === iata) || (icao && cIcao === icao);
     if (stationSpecific && !matchesAirport) continue;
     if (!c.phone && !c.email && !c.name && !c.label) continue;
     const list = contactsByOrg.get(c.organisation_id) ?? [];
@@ -216,33 +314,83 @@ export async function getAirportDetail(
     contactsByOrg.set(c.organisation_id, list);
   }
 
+  const stationLocScope = new Map<string, (string | null)[]>();
+  for (const sc of (stationScopeRes.data as any[]) ?? []) {
+    const list = stationLocScope.get(sc.station_id) ?? [];
+    list.push(sc.location_scope ?? null);
+    stationLocScope.set(sc.station_id, list);
+  }
+
+  function buildAuthorities(orgId: string): AuthorityGroup[] {
+    const certMap = certsByOrgAuth.get(orgId);
+    const scopeMap = scopeByOrgAuth.get(orgId);
+    const authIds = new Set<string>();
+    if (certMap) for (const k of certMap.keys()) authIds.add(k);
+    if (scopeMap) for (const k of scopeMap.keys()) authIds.add(k);
+
+    const groups: AuthorityGroup[] = [];
+    for (const authId of authIds) {
+      const meta = authById.get(authId);
+      const code = meta?.code ?? "Other";
+      const certificates = (certMap?.get(authId) ?? []).sort(
+        (a, b) => approvalRank(a.approvalType) - approvalRank(b.approvalType),
+      );
+      const classesMap = scopeMap?.get(authId);
+      const classes: ScopeClass[] = classesMap
+        ? Array.from(classesMap.values())
+            .map((g) => ({ label: g.label, items: Array.from(g.items) }))
+            .sort(
+              (a, b) =>
+                classRank(a.label) - classRank(b.label) ||
+                a.label.localeCompare(b.label),
+            )
+        : [];
+      groups.push({
+        code,
+        name: meta?.name ?? null,
+        isEasa: code.toUpperCase() === "EASA",
+        certificates,
+        classes,
+        url: urlByOrgAuth.get(`${orgId}|${authId}`) ?? certificates.find((c) => c.url)?.url ?? null,
+      });
+    }
+    // EASA first, then alphabetically by code
+    groups.sort(
+      (a, b) => (a.isEasa ? 0 : 1) - (b.isEasa ? 0 : 1) || a.code.localeCompare(b.code),
+    );
+    return groups;
+  }
+
   const organisations: OrgAtAirport[] = stationRows.map((s) => {
     const org = orgById.get(s.organisation_id) ?? {};
-    const approvals = (approvalsByOrg.get(s.organisation_id) ?? []).sort(
-      (a, b) => approvalRank(a.approvalType) - approvalRank(b.approvalType),
-    );
-    const scopeEntry = scopeByStation.get(s.id) ?? { texts: [], scopes: [] };
     return {
       stationId: s.id,
       organisationId: s.organisation_id,
       name: org.name ?? "Unknown organisation",
       legalName: org.legal_name ?? null,
-      locationScope: deriveLocationScope(scopeEntry.scopes),
+      locationScope: deriveLocationScope(stationLocScope.get(s.id) ?? []),
       countryCode: s.country_code ?? org.country_code ?? null,
       address: s.address ?? org.address ?? null,
       phone: s.phone ?? org.phone ?? null,
       email: s.email ?? org.email ?? null,
       website: org.website ?? null,
-      approvals,
-      scope: uniq(scopeEntry.texts),
+      authorities: buildAuthorities(s.organisation_id),
       contacts: (contactsByOrg.get(s.organisation_id) ?? []).slice(0, 4),
     };
   });
 
-  // MROs with a Part-145 approval first, then alphabetical.
+  // MROs with a Part-145 certificate first, then alphabetical.
   organisations.sort((a, b) => {
-    const pa = a.approvals.some((x) => x.approvalType === "Part-145") ? 0 : 1;
-    const pb = b.approvals.some((x) => x.approvalType === "Part-145") ? 0 : 1;
+    const pa = a.authorities.some((g) =>
+      g.certificates.some((c) => c.approvalType === "Part-145"),
+    )
+      ? 0
+      : 1;
+    const pb = b.authorities.some((g) =>
+      g.certificates.some((c) => c.approvalType === "Part-145"),
+    )
+      ? 0
+      : 1;
     if (pa !== pb) return pa - pb;
     return a.name.localeCompare(b.name);
   });

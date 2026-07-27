@@ -52,6 +52,10 @@ function tidyLayers(layers: any[]): any[] {
     });
 }
 
+// The self-hosted Europe basemap tops out at zoom 13, so cap the map there:
+// with no overzoom, every zoom level renders crisp native tiles.
+const MAX_ZOOM = 13;
+
 interface Libs {
   maplibregl: any;
   pmtiles: any;
@@ -205,7 +209,7 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
             center: [10, 50],
             zoom: 4,
             minZoom: 2,
-            maxZoom: 17,
+            maxZoom: MAX_ZOOM,
             attributionControl: true,
             dragRotate: false,
             pitchWithRotate: false,

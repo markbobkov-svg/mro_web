@@ -3,13 +3,13 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Protomaps' demo PMTiles only sends CORS headers for protomaps.com, so the
-// browser can't read it cross-origin from our domain. Proxy it through our own
-// server (server-to-server fetch isn't subject to CORS) and re-serve the byte
-// ranges same-origin. NOTE: this uses Protomaps' public demo bucket — fine for
-// now; for production launch, self-host the PMTiles (e.g. on R2/S3) or use a
-// paid Protomaps plan, then point pmtiles:// straight at it.
-const SOURCE = "https://demo-bucket.protomaps.com/v4.pmtiles";
+// Our own Europe basemap (z0-13, extracted from Protomaps' OpenStreetMap build)
+// hosted on Cloudflare R2. We proxy it through this same-origin route instead of
+// letting the browser read the r2.dev URL directly: that keeps us off r2.dev's
+// public rate limits and needs no CORS on the bucket. The server-to-server fetch
+// re-serves the byte ranges same-origin. The object is public, so no creds here.
+const SOURCE =
+  "https://pub-8dfd157e131f4ce29bfa353f4c095e5a.r2.dev/europe-z13.pmtiles";
 
 export async function GET(req: Request) {
   // pmtiles always uses ranged reads; guard against fetching the whole file.

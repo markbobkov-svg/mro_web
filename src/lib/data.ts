@@ -192,8 +192,17 @@ export async function getAirportDetail(
   const orgIds = uniq(stationRows.map((s) => s.organisation_id).filter(Boolean));
   const stationIds = stationRows.map((s) => s.id);
 
-  const [orgsRes, apprRes, scopeRows, stationScopeRes, contactsRes, authRes] =
-    await Promise.all([
+  const [
+    orgsRes,
+    apprRes,
+    scopeRows,
+    stationScopeRes,
+    contactsRes,
+    authRes,
+    profilesRes,
+    managedContactsRes,
+    membersRes,
+  ] = await Promise.all([
       supabase
         .from("organisations")
         .select("id, name, legal_name, address, country_code, phone, email, website")
@@ -216,6 +225,24 @@ export async function getAirportDetail(
         )
         .in("organisation_id", orgIds),
       supabase.from("authorities").select("id, code, name"),
+      // The organisation-maintained layer. Kept in its own tables so a re-scrape
+      // can never overwrite what an organisation typed; merged over the scraped
+      // values here, at read time.
+      supabase
+        .from("organisation_profiles")
+        .select(
+          "organisation_id, tagline, description, logo_url, website, email, phone, address, aog_phone, aog_email",
+        )
+        .in("organisation_id", orgIds),
+      supabase
+        .from("organisation_managed_contacts")
+        .select("organisation_id, function_label, name, phone, email, hours, sort_order")
+        .in("organisation_id", orgIds)
+        .order("sort_order"),
+      supabase
+        .from("organisation_members")
+        .select("organisation_id")
+        .in("organisation_id", orgIds),
     ]);
 
   for (const [label, res] of [
@@ -226,6 +253,41 @@ export async function getAirportDetail(
     ["authorities", authRes],
   ] as const) {
     if (res.error) throw new Error(`getAirportDetail(${label}): ${res.error.message}`);
+  }
+
+  // The dashboard tables are additive: if the migration hasn't been applied to
+  // this database yet, the map must still work. Missing table => no overrides.
+  const profileByOrg = new Map<string, any>();
+  if (!profilesRes.error) {
+    for (const p of (profilesRes.data as any[]) ?? []) {
+      profileByOrg.set(p.organisation_id, p);
+    }
+  }
+
+  // "Claimed" means someone from the organisation has been verified as owning
+  // the listing — not that they have edited it yet, so this comes from
+  // membership rather than from the presence of a profile row.
+  const claimedOrgs = new Set<string>();
+  if (!membersRes.error) {
+    for (const m of (membersRes.data as any[]) ?? []) {
+      claimedOrgs.add(m.organisation_id);
+    }
+  }
+
+  const managedByOrg = new Map<string, Contact[]>();
+  if (!managedContactsRes.error) {
+    for (const c of (managedContactsRes.data as any[]) ?? []) {
+      if (!c.phone && !c.email && !c.name && !c.function_label) continue;
+      const list = managedByOrg.get(c.organisation_id) ?? [];
+      list.push({
+        label: c.function_label ?? null,
+        name: c.name ?? null,
+        phone: c.phone ?? null,
+        email: c.email ?? null,
+        hours: c.hours ?? null,
+      });
+      managedByOrg.set(c.organisation_id, list);
+    }
   }
 
   const orgById = new Map<string, any>();
@@ -384,6 +446,11 @@ export async function getAirportDetail(
 
   const organisations: OrgAtAirport[] = stationRows.map((s) => {
     const org = orgById.get(s.organisation_id) ?? {};
+    const profile = profileByOrg.get(s.organisation_id) ?? null;
+    const managed = managedByOrg.get(s.organisation_id);
+
+    // Precedence, most specific first: what the organisation typed, then the
+    // station's own details, then the organisation-level scraped values.
     return {
       stationId: s.id,
       organisationId: s.organisation_id,
@@ -391,12 +458,20 @@ export async function getAirportDetail(
       legalName: org.legal_name ?? null,
       locationScope: deriveLocationScope(stationLocScope.get(s.id) ?? []),
       countryCode: s.country_code ?? org.country_code ?? null,
-      address: s.address ?? org.address ?? null,
-      phone: s.phone ?? org.phone ?? null,
-      email: s.email ?? org.email ?? null,
-      website: org.website ?? null,
+      address: profile?.address ?? s.address ?? org.address ?? null,
+      phone: profile?.phone ?? s.phone ?? org.phone ?? null,
+      email: profile?.email ?? s.email ?? org.email ?? null,
+      website: profile?.website ?? org.website ?? null,
       authorities: buildAuthorities(s.organisation_id),
-      contacts: (contactsByOrg.get(s.organisation_id) ?? []).slice(0, 4),
+      // An organisation that maintains its own contacts replaces the scraped
+      // ones outright — a half-merged list would show stale desks next to live.
+      contacts: (managed ?? contactsByOrg.get(s.organisation_id) ?? []).slice(0, 4),
+      claimed: claimedOrgs.has(s.organisation_id),
+      tagline: profile?.tagline ?? null,
+      description: profile?.description ?? null,
+      logoUrl: profile?.logo_url ?? null,
+      aogPhone: profile?.aog_phone ?? null,
+      aogEmail: profile?.aog_email ?? null,
     };
   });
 

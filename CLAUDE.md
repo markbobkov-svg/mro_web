@@ -43,6 +43,13 @@ contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
    **DNS only** (grey cloud) so traffic isn't double-proxied; the tiles
    subdomain, by contrast, *should* stay proxied (orange cloud) for the CDN.
 3. Refresh the PMTiles extract when the OSM snapshot gets stale.
+4. **Custom SMTP before opening the dashboard to organisations.** Supabase's
+   built-in mailer is rate-limited to a handful of messages an hour and on new
+   projects only delivers to the project team's own addresses — so real
+   organisations would never receive their confirmation link, and without a
+   confirmed address the domain check proves nothing. Set up Resend / Postmark
+   / SES under Authentication → Emails, and set `NEXT_PUBLIC_SITE_URL` so the
+   links point at the real domain.
 
 ## Decisions already taken — don't redo
 
@@ -59,6 +66,52 @@ contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
 - Basemap decluttering is deliberately minimal: only `roads_shields` and the
   `places_locality` **icon** are dropped. All other detail (roads, buildings,
   labels) stays — an earlier, more aggressive filter was rolled back.
+
+## Organisation dashboard (`/dashboard`, `/admin`)
+
+Part-145 organisations claim their listing and maintain it themselves.
+Migration: `supabase/migrations/0001_org_dashboard.sql`.
+
+- **Accounts** are Supabase Auth, e-mail + password, confirmation required.
+  All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
+  in **httpOnly cookies**, so — as with the DB key — nothing reaches browser JS.
+- **Claiming.** A confirmed address on the organisation's own domain (its
+  website, or a domain already in its scraped contacts) is approved on the
+  spot; anything else queues for manual review. Free-mail domains never
+  auto-approve. Organisations *not yet in the DB* are always reviewed by hand,
+  and the organisation row is created on approval.
+- **What an organisation may edit directly:** profile (tagline, description,
+  logo, website/e-mail/phone/address overrides, AOG desk) and contacts. These
+  publish immediately.
+- **What goes through moderation:** approvals, scope and stations — regulatory
+  facts from the authorities' registers. Organisations file change requests;
+  an admin applies them from `/admin`.
+- **Admin** is the `app_users.is_admin` flag; there is no separate role table.
+
+### The rule that keeps scraper and dashboard from fighting
+
+The scraper owns `organisations`, `organisation_approvals`, `organisation_scope`
+and re-writes them on every run. **Nothing an organisation types is ever stored
+in those tables.** Edits live in `organisation_profiles` and
+`organisation_managed_contacts` and are merged *over* the scraped rows at read
+time in `getAirportDetail`, so a re-scrape cannot wipe them. Precedence is
+organisation → station → scraped organisation row; an organisation that adds
+any managed contact replaces the scraped contact list outright.
+
+The one place this does not hold is an **admin-approved change request**, which
+writes to the scraped tables by design — so a later scrape can revert it. If
+that starts to bite, teach `data_scraper` to leave rows it did not produce
+alone.
+
+### Security boundary — read before touching the dashboard
+
+`SUPABASE_KEY` is a **service_role** key, so the DB returns any row it is asked
+for: **RLS is not what protects one organisation from another.** The guards in
+`src/lib/guards.ts` are. Any path that reads or writes rows for an organisation
+id taken from the request must go through `requireMember` / `requireAdmin`
+first. The migration still enables RLS with restrictive policies as a second
+line of defence, so the database is safe if the key is ever swapped for an anon
+key or a browser-side client appears.
 
 ## Data model notes
 

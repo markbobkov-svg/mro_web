@@ -29,6 +29,20 @@ export function getSupabase(): SupabaseClient {
   return cached;
 }
 
+/**
+ * Same client, named for intent.
+ *
+ * SUPABASE_KEY is a service_role key, so this bypasses row-level security. That
+ * is safe only because it never leaves the server — but it does mean RLS is not
+ * the thing protecting one organisation's data from another. Every dashboard
+ * write goes through the guards in `src/lib/guards.ts`, which check membership
+ * before touching a row. Treat those checks as the security boundary, and never
+ * pass a user-supplied organisation id to this client without one.
+ */
+export function getAdminSupabase(): SupabaseClient {
+  return getSupabase();
+}
+
 /** True when both env vars are present — lets the UI show a friendly notice. */
 export function hasSupabaseCredentials(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_KEY);

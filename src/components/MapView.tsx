@@ -243,6 +243,13 @@ export default function MapView({ markers, loadError }: Props) {
           <p className="mt-1.5 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
             Part-145 · MRO · Europe
           </p>
+          <a
+            href="/dashboard"
+            className="pointer-events-auto mt-2 inline-block text-[10px] uppercase tracking-wide2
+              text-white/35 transition hover:text-white/70"
+          >
+            For MRO organisations →
+          </a>
         </div>
 
         {/* pushes the search bar to the bottom edge on mobile only */}

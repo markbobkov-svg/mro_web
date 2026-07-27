@@ -75,6 +75,17 @@ export interface OrgAtAirport {
   /** Approvals + scope grouped by authority, EASA first (the default view). */
   authorities: AuthorityGroup[];
   contacts: Contact[];
+
+  // --- filled in from the organisation's own dashboard, when it has one ---
+  /** The organisation has claimed this listing and maintains it themselves. */
+  claimed: boolean;
+  /** One-liner the organisation wrote about itself. */
+  tagline: string | null;
+  description: string | null;
+  logoUrl: string | null;
+  /** Aircraft-on-ground desk — the number an operator calls in a hurry. */
+  aogPhone: string | null;
+  aogEmail: string | null;
 }
 
 /** One row of the search dropdown, with the reason it matched. */

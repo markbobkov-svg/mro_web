@@ -89,15 +89,56 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
     <div className="px-2 py-5">
       {/* header */}
       <div className="min-w-0">
-        <h3 className="text-sm font-medium leading-snug text-white">
-          {org.name}
+        <h3 className="flex items-center gap-2 text-sm font-medium leading-snug text-white">
+          <span className="min-w-0">{org.name}</span>
+          {org.claimed && (
+            <span
+              title="This organisation maintains its own listing"
+              className="shrink-0 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5
+                text-[9px] uppercase tracking-wide2 text-accent-bright"
+            >
+              Verified
+            </span>
+          )}
         </h3>
         {org.legalName && org.legalName !== org.name && (
           <p className="mt-0.5 truncate text-xs text-white/40">
             {org.legalName}
           </p>
         )}
+        {org.tagline && (
+          <p className="mt-1 text-xs leading-relaxed text-white/55">
+            {org.tagline}
+          </p>
+        )}
       </div>
+
+      {/* AOG desk — the thing an operator with a grounded aircraft looks for */}
+      {(org.aogPhone || org.aogEmail) && (
+        <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2">
+          <p className="text-[9px] uppercase tracking-wide2 text-amber-300/80">
+            AOG desk
+          </p>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {org.aogPhone && (
+              <a
+                href={`tel:${org.aogPhone.replace(/\s+/g, "")}`}
+                className="text-xs text-amber-100 transition hover:text-white"
+              >
+                {org.aogPhone}
+              </a>
+            )}
+            {org.aogEmail && (
+              <a
+                href={`mailto:${org.aogEmail}`}
+                className="truncate text-xs text-amber-100/80 transition hover:text-white"
+              >
+                {org.aogEmail}
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {authorities.length === 0 && (
         <p className="mt-3 text-xs text-white/30">No approval details.</p>

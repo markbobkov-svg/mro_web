@@ -35,8 +35,8 @@ export default async function AdminPage() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-xl font-semibold text-white">Review queue</h1>
-        <p className="mt-1 text-sm text-neutral-400">
+        <h1 className="text-lg font-normal tracking-wide2 text-white">Review queue</h1>
+        <p className="mt-1 text-sm text-white/45">
           {claims.length} claim{claims.length === 1 ? "" : "s"} and{" "}
           {changes.length} change request{changes.length === 1 ? "" : "s"}{" "}
           waiting.
@@ -44,11 +44,11 @@ export default async function AdminPage() {
       </div>
 
       <section>
-        <h2 className="mb-3 text-[11px] uppercase tracking-wide2 text-neutral-500">
+        <h2 className="mb-3 text-[10px] uppercase tracking-wide2 text-white/35">
           Account claims
         </h2>
         {claims.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-base-500 p-6 text-center text-sm text-neutral-500">
+          <p className="rounded-[2px] border border-dashed border-white/10 p-6 text-center text-sm text-white/35">
             Nothing to review.
           </p>
         ) : (
@@ -63,11 +63,11 @@ export default async function AdminPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-[11px] uppercase tracking-wide2 text-neutral-500">
+        <h2 className="mb-3 text-[10px] uppercase tracking-wide2 text-white/35">
           Proposed data changes
         </h2>
         {changes.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-base-500 p-6 text-center text-sm text-neutral-500">
+          <p className="rounded-[2px] border border-dashed border-white/10 p-6 text-center text-sm text-white/35">
             Nothing to review.
           </p>
         ) : (

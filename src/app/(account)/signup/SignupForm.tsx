@@ -12,9 +12,9 @@ export function SignupForm() {
   const [state, action] = useFormState(signUpAction, EMPTY);
 
   return (
-    <div className="rounded-xl border border-base-600 bg-base-800 p-6">
-      <h1 className="text-base font-semibold text-white">Create an account</h1>
-      <p className="mt-1 text-sm text-neutral-400">
+    <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-6">
+      <h1 className="text-sm font-medium tracking-wide2 text-white">Create an account</h1>
+      <p className="mt-1 text-sm text-white/45">
         For Part-145 organisations that want to manage their own listing.
       </p>
 
@@ -34,7 +34,7 @@ export function SignupForm() {
           />
         </Field>
 
-        <p className="text-xs leading-relaxed text-neutral-500">
+        <p className="text-xs leading-relaxed text-white/35">
           Use the address on your organisation&rsquo;s own domain. It lets us
           verify your claim automatically — a free mailbox
           (gmail, outlook&nbsp;…) means the claim waits for manual review.
@@ -67,9 +67,9 @@ export function SignupForm() {
         </SubmitButton>
       </form>
 
-      <p className="mt-4 text-center text-xs text-neutral-500">
+      <p className="mt-4 text-center text-xs text-white/35">
         Already registered?{" "}
-        <Link href="/login" className="text-neutral-300 transition hover:text-white">
+        <Link href="/login" className="text-white/70 transition hover:text-white">
           Sign in
         </Link>
       </p>

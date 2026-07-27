@@ -52,8 +52,8 @@ export function RegulatorySections({ org }: { org: DashboardOrg }) {
 function Heading({ title, note }: { title: string; note: string }) {
   return (
     <div className="mb-3">
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
-      <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{note}</p>
+      <h2 className="text-sm font-medium text-white">{title}</h2>
+      <p className="mt-0.5 text-xs leading-relaxed text-white/35">{note}</p>
     </div>
   );
 }
@@ -64,35 +64,35 @@ function ApprovalsPanel({ org }: { org: DashboardOrg }) {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
-    <div className="space-y-3 rounded-xl border border-base-600 bg-base-800 p-5">
+    <div className="space-y-3 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {org.approvals.length === 0 ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-white/35">
           No approvals on file. If you hold one, propose it below.
         </p>
       ) : (
-        <ul className="divide-y divide-base-600">
+        <ul className="divide-y divide-white/10">
           {org.approvals.map((a) => (
             <li key={a.id} className="py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm text-neutral-100">
-                    <span className="mr-2 rounded border border-base-500 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-neutral-400">
+                  <p className="text-sm text-white/90">
+                    <span className="mr-2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-white/45">
                       {a.authorityCode}
                     </span>
                     {a.approvalType}
                     {a.reference ? (
-                      <span className="ml-2 font-mono text-xs text-neutral-400">
+                      <span className="ml-2 font-mono text-xs text-white/45">
                         {a.reference}
                       </span>
                     ) : null}
                   </p>
                   {a.ratings.length > 0 ? (
-                    <p className="mt-1 text-xs text-neutral-500">
+                    <p className="mt-1 text-xs text-white/35">
                       {a.ratings.join(" · ")}
                     </p>
                   ) : null}
                   {a.validUntil ? (
-                    <p className="mt-0.5 text-xs text-neutral-600">
+                    <p className="mt-0.5 text-xs text-white/25">
                       valid until {a.validUntil}
                     </p>
                   ) : null}
@@ -100,14 +100,14 @@ function ApprovalsPanel({ org }: { org: DashboardOrg }) {
                 <button
                   type="button"
                   onClick={() => setOpen(open === a.id ? null : a.id)}
-                  className="shrink-0 text-xs text-neutral-400 transition hover:text-white"
+                  className="shrink-0 text-xs text-white/45 transition hover:text-white"
                 >
                   {open === a.id ? "Cancel" : "Propose a change"}
                 </button>
               </div>
 
               {open === a.id ? (
-                <div className="mt-3 border-l-2 border-base-500 pl-4">
+                <div className="mt-3 border-l-2 border-white/10 pl-4">
                   <ApprovalChangeForm
                     org={org}
                     approval={a}
@@ -216,7 +216,7 @@ function ApprovalChangeForm({
           <button
             type="button"
             onClick={onDone}
-            className="rounded-md px-3 py-2 text-sm text-neutral-500 transition hover:text-neutral-300"
+            className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
           >
             Cancel
           </button>
@@ -243,40 +243,40 @@ function ScopePanel({ org }: { org: DashboardOrg }) {
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-base-600 bg-base-800 p-5">
+    <div className="space-y-4 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {org.scope.length === 0 ? (
-        <p className="text-sm text-neutral-500">No scope on file yet.</p>
+        <p className="text-sm text-white/35">No scope on file yet.</p>
       ) : (
         [...byAuthority.entries()].map(([authority, classes]) => (
           <div key={authority}>
-            <p className="mb-2 text-[11px] uppercase tracking-wide2 text-neutral-400">
+            <p className="mb-2 text-[10px] uppercase tracking-wide2 text-white/45">
               {authority}
             </p>
             <div className="space-y-2">
               {[...classes.entries()].map(([cls, rows]) => (
                 <details
                   key={cls}
-                  className="rounded-lg border border-base-600 bg-base-900 px-3 py-2"
+                  className="rounded-[2px] border border-white/10 bg-black/40 px-3 py-2"
                 >
-                  <summary className="cursor-pointer text-sm text-neutral-200">
+                  <summary className="cursor-pointer text-sm text-white/85">
                     {cls}
-                    <span className="ml-2 text-xs text-neutral-500">
+                    <span className="ml-2 text-xs text-white/35">
                       {rows.length} line{rows.length === 1 ? "" : "s"}
                     </span>
                   </summary>
                   <ul className="mt-2 space-y-1">
                     {rows.slice(0, 40).map((r) => (
-                      <li key={r.id} className="text-xs leading-relaxed text-neutral-400">
+                      <li key={r.id} className="text-xs leading-relaxed text-white/45">
                         {r.scopeText ?? r.ratingText}
                         {r.locationScope ? (
-                          <span className="ml-2 text-neutral-600">
+                          <span className="ml-2 text-white/25">
                             [{r.locationScope}]
                           </span>
                         ) : null}
                       </li>
                     ))}
                     {rows.length > 40 ? (
-                      <li className="text-xs text-neutral-600">
+                      <li className="text-xs text-white/25">
                         …and {rows.length - 40} more
                       </li>
                     ) : null}
@@ -354,16 +354,16 @@ function ScopeChangeForm({ org }: { org: DashboardOrg }) {
 
 function StationsPanel({ org }: { org: DashboardOrg }) {
   return (
-    <div className="space-y-3 rounded-xl border border-base-600 bg-base-800 p-5">
+    <div className="space-y-3 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {org.stations.length === 0 ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-white/35">
           You don&rsquo;t appear at any airport yet.
         </p>
       ) : (
-        <ul className="divide-y divide-base-600">
+        <ul className="divide-y divide-white/10">
           {org.stations.map((s) => (
             <li key={s.id} className="py-2.5">
-              <p className="text-sm text-neutral-100">
+              <p className="text-sm text-white/90">
                 {s.iata || s.icao ? (
                   <span className="mr-2 font-mono text-xs text-accent">
                     {s.iata ?? s.icao}
@@ -372,7 +372,7 @@ function StationsPanel({ org }: { org: DashboardOrg }) {
                 {s.airportName ?? "Unknown airport"}
               </p>
               {s.address || s.phone || s.email ? (
-                <p className="mt-0.5 truncate text-xs text-neutral-500">
+                <p className="mt-0.5 truncate text-xs text-white/35">
                   {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
                 </p>
               ) : null}
@@ -423,8 +423,8 @@ function StationChangeForm({ org }: { org: DashboardOrg }) {
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
             required
-            className="w-full rounded-md border border-base-500 bg-base-900 px-3 py-2 text-sm
-              text-neutral-100 outline-none focus:border-accent"
+            className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm
+              text-white/90 outline-none focus:border-accent"
           >
             <option value="">Pick a station…</option>
             {org.stations.map((s) => (
@@ -480,10 +480,10 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md border px-3 py-1.5 text-xs transition ${
+      className={`rounded-[2px] border px-3 py-1.5 text-xs transition ${
         active
           ? "border-accent bg-accent/10 text-accent-bright"
-          : "border-base-500 text-neutral-400 hover:text-neutral-200"
+          : "border-white/10 text-white/45 hover:text-white/85"
       }`}
     >
       {children}
@@ -505,8 +505,8 @@ function AddToggle({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-dashed border-base-500 px-4 py-2 text-sm
-          text-neutral-400 transition hover:border-neutral-500 hover:text-white"
+        className="rounded-[2px] border border-dashed border-white/10 px-4 py-2 text-sm
+          text-white/45 transition hover:border-white/25 hover:text-white"
       >
         {label}
       </button>
@@ -514,15 +514,15 @@ function AddToggle({
   }
 
   return (
-    <div className="rounded-lg border border-base-500 bg-base-900 p-4">
+    <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide2 text-neutral-400">
+        <span className="text-xs uppercase tracking-wide2 text-white/45">
           {label.replace(/^\+\s*/, "")}
         </span>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-xs text-neutral-500 transition hover:text-neutral-300"
+          className="text-xs text-white/35 transition hover:text-white/70"
         >
           Close
         </button>

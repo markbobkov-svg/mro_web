@@ -25,9 +25,9 @@ export function LoginForm({
   const [showReset, setShowReset] = useState(false);
 
   return (
-    <div className="rounded-xl border border-base-600 bg-base-800 p-6">
-      <h1 className="text-base font-semibold text-white">Sign in</h1>
-      <p className="mt-1 text-sm text-neutral-400">
+    <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-6">
+      <h1 className="text-sm font-medium tracking-wide2 text-white">Sign in</h1>
+      <p className="mt-1 text-sm text-white/45">
         Manage your organisation&rsquo;s listing.
       </p>
 
@@ -61,21 +61,21 @@ export function LoginForm({
           </SubmitButton>
         </form>
 
-        <div className="flex items-center justify-between text-xs text-neutral-500">
+        <div className="flex items-center justify-between text-xs text-white/35">
           <button
             type="button"
             onClick={() => setShowReset((v) => !v)}
-            className="transition hover:text-neutral-300"
+            className="transition hover:text-white/70"
           >
             Forgot password?
           </button>
-          <Link href="/signup" className="transition hover:text-neutral-300">
+          <Link href="/signup" className="transition hover:text-white/70">
             Create an account
           </Link>
         </div>
 
         {showReset ? (
-          <form action={resetAction} className="space-y-3 border-t border-base-600 pt-4">
+          <form action={resetAction} className="space-y-3 border-t border-white/10 pt-4">
             {resetState.error ? <Alert kind="error">{resetState.error}</Alert> : null}
             {resetState.notice ? <Alert kind="notice">{resetState.notice}</Alert> : null}
             <Field label="Send a reset link to">

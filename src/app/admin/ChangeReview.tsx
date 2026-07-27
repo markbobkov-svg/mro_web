@@ -17,20 +17,20 @@ export function ChangeReview({ request }: { request: ChangeRequest }) {
   const entries = Object.entries(request.payload ?? {});
 
   return (
-    <div className="rounded-xl border border-base-600 bg-base-800 p-5">
+    <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">
             {describe(request)}
-            <span className="ml-2 text-xs font-normal text-neutral-500">
+            <span className="ml-2 text-xs font-normal text-white/35">
               {request.organisationName ?? request.organisationId}
             </span>
           </p>
-          <p className="mt-1 text-xs text-neutral-400">
+          <p className="mt-1 text-xs text-white/45">
             from {request.userEmail ?? request.userId}
           </p>
         </div>
-        <span className="text-xs text-neutral-600">
+        <span className="text-xs text-white/25">
           {formatDate(request.createdAt)}
         </span>
       </div>
@@ -39,15 +39,15 @@ export function ChangeReview({ request }: { request: ChangeRequest }) {
         <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
           {entries.map(([k, v]) => (
             <div key={k} className="flex gap-2">
-              <dt className="shrink-0 text-neutral-500">{humanise(k)}</dt>
-              <dd className="min-w-0 break-words text-neutral-300">{String(v)}</dd>
+              <dt className="shrink-0 text-white/35">{humanise(k)}</dt>
+              <dd className="min-w-0 break-words text-white/70">{String(v)}</dd>
             </div>
           ))}
         </dl>
       ) : null}
 
       {request.note ? (
-        <p className="mt-3 rounded-md border border-base-500 bg-base-900 px-3 py-2 text-xs leading-relaxed text-neutral-300">
+        <p className="mt-3 rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-xs leading-relaxed text-white/70">
           {request.note}
         </p>
       ) : null}

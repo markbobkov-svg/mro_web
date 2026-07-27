@@ -27,7 +27,7 @@ export function ClaimPanel({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 rounded-lg border border-base-600 bg-base-800 p-1">
+      <div className="flex gap-1 rounded-[2px] border border-white/10 bg-[#141414]/60 p-1">
         <TabButton active={tab === "existing"} onClick={() => setTab("existing")}>
           It&rsquo;s already listed
         </TabButton>
@@ -58,10 +58,10 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 rounded-md px-3 py-2 text-sm transition ${
+      className={`flex-1 rounded-[2px] px-3 py-2 text-sm transition ${
         active
-          ? "bg-base-600 text-white"
-          : "text-neutral-400 hover:text-neutral-200"
+          ? "bg-white/10 text-white"
+          : "text-white/45 hover:text-white/85"
       }`}
     >
       {children}
@@ -109,7 +109,7 @@ function ExistingOrgClaim({ userEmail }: { userEmail: string }) {
     ) ?? false;
 
   return (
-    <div className="rounded-xl border border-base-600 bg-base-800 p-5">
+    <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
 
       <Field label="Find your organisation" hint="name or legal name">
@@ -125,12 +125,12 @@ function ExistingOrgClaim({ userEmail }: { userEmail: string }) {
       </Field>
 
       {query.trim().length >= 2 && !selected ? (
-        <ul className="mt-3 max-h-72 divide-y divide-base-600 overflow-y-auto scroll-thin rounded-lg border border-base-600">
+        <ul className="mt-3 max-h-72 divide-y divide-white/10 overflow-y-auto scroll-thin rounded-[2px] border border-white/10">
           {searching && results.length === 0 ? (
-            <li className="px-3 py-3 text-sm text-neutral-500">Searching…</li>
+            <li className="px-3 py-3 text-sm text-white/35">Searching…</li>
           ) : null}
           {!searching && results.length === 0 ? (
-            <li className="px-3 py-3 text-sm text-neutral-500">
+            <li className="px-3 py-3 text-sm text-white/35">
               Nothing matched. If it really isn&rsquo;t listed, use
               &ldquo;Not on the map yet&rdquo;.
             </li>
@@ -142,18 +142,18 @@ function ExistingOrgClaim({ userEmail }: { userEmail: string }) {
                 disabled={r.claimed}
                 onClick={() => setSelected(r)}
                 className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left
-                  transition hover:bg-base-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-sm text-neutral-100">
+                  <span className="block truncate text-sm text-white/90">
                     {r.name}
                   </span>
-                  <span className="block truncate text-xs text-neutral-500">
+                  <span className="block truncate text-xs text-white/35">
                     {[r.countryCode, r.website].filter(Boolean).join(" · ")}
                   </span>
                 </span>
                 {r.claimed ? (
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide2 text-neutral-500">
+                  <span className="shrink-0 text-[10px] uppercase tracking-wide2 text-white/35">
                     claimed
                   </span>
                 ) : null}
@@ -167,13 +167,13 @@ function ExistingOrgClaim({ userEmail }: { userEmail: string }) {
         <form action={action} className="mt-4 space-y-4">
           <input type="hidden" name="organisationId" value={selected.id} />
 
-          <div className="rounded-lg border border-base-500 bg-base-900 p-3">
+          <div className="rounded-[2px] border border-white/10 bg-black/40 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-white">
                   {selected.name}
                 </p>
-                <p className="truncate text-xs text-neutral-500">
+                <p className="truncate text-xs text-white/35">
                   {[selected.countryCode, selected.website]
                     .filter(Boolean)
                     .join(" · ")}
@@ -182,7 +182,7 @@ function ExistingOrgClaim({ userEmail }: { userEmail: string }) {
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="shrink-0 text-xs text-neutral-500 transition hover:text-neutral-300"
+                className="shrink-0 text-xs text-white/35 transition hover:text-white/70"
               >
                 change
               </button>
@@ -230,7 +230,7 @@ function NewOrgRequest() {
   const [state, action] = useFormState(requestNewOrgAction, EMPTY);
 
   return (
-    <form action={action} className="space-y-4 rounded-xl border border-base-600 bg-base-800 p-5">
+    <form action={action} className="space-y-4 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
 
       <Alert kind="info">

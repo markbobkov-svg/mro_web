@@ -15,15 +15,15 @@ export default async function ClaimPage() {
       <div>
         <Link
           href="/dashboard"
-          className="text-xs text-neutral-500 transition hover:text-neutral-300"
+          className="text-xs text-white/35 transition hover:text-white/70"
         >
           ← Dashboard
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-white">
+        <h1 className="mt-2 text-lg font-normal tracking-wide2 text-white">
           Claim your organisation
         </h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Signed in as <span className="text-neutral-300">{user.email}</span>.
+        <p className="mt-1 text-sm text-white/45">
+          Signed in as <span className="text-white/70">{user.email}</span>.
         </p>
       </div>
 

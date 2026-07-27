@@ -13,7 +13,7 @@ export function ProfileForm({ org }: { org: DashboardOrg }) {
   const p = org.profile;
 
   return (
-    <form action={action} className="space-y-4 rounded-xl border border-base-600 bg-base-800 p-5">
+    <form action={action} className="space-y-4 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       <input type="hidden" name="organisationId" value={org.id} />
 
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
@@ -61,11 +61,11 @@ export function ProfileForm({ org }: { org: DashboardOrg }) {
         </Field>
       </div>
 
-      <div className="rounded-lg border border-base-500 bg-base-900 p-4">
-        <p className="mb-3 text-[11px] uppercase tracking-wide2 text-neutral-400">
+      <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
+        <p className="mb-3 text-[10px] uppercase tracking-wide2 text-white/45">
           AOG desk
         </p>
-        <p className="mb-3 text-xs text-neutral-500">
+        <p className="mb-3 text-xs text-white/35">
           The number an operator calls when an aircraft is on the ground. Shown
           prominently on your card.
         </p>
@@ -80,7 +80,7 @@ export function ProfileForm({ org }: { org: DashboardOrg }) {
       </div>
 
       <div className="flex items-center justify-between gap-4 pt-1">
-        <p className="text-xs text-neutral-600">
+        <p className="text-xs text-white/25">
           {p?.updatedAt ? `Last saved ${formatDate(p.updatedAt)}` : "Not edited yet"}
         </p>
         <SubmitButton pendingLabel="Saving…">Save profile</SubmitButton>

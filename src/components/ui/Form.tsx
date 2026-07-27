@@ -2,7 +2,38 @@
 
 import { useFormStatus } from "react-dom";
 
-/** Shared form furniture for the account + dashboard screens. */
+/**
+ * Shared furniture for the account + dashboard screens.
+ *
+ * Same visual language as the map: 2px corners, hairline white borders over a
+ * near-black translucent panel, tiny uppercase labels, opacity-graded text
+ * rather than a grey scale, and accent-bright reserved for what matters.
+ */
+
+export function Panel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-[2px] border border-white/10 bg-[#141414]/60 backdrop-blur-xl ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Section eyebrow — the `Part-145 · MRO · Europe` treatment. */
+export function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] uppercase tracking-wide2 text-white/35">
+      {children}
+    </p>
+  );
+}
 
 export function Label({
   children,
@@ -13,20 +44,20 @@ export function Label({
 }) {
   return (
     <span className="mb-1.5 flex items-baseline justify-between gap-3">
-      <span className="text-[11px] uppercase tracking-wide2 text-neutral-400">
+      <span className="text-[10px] uppercase tracking-wide2 text-white/40">
         {children}
       </span>
       {hint ? (
-        <span className="text-[11px] text-neutral-500 truncate">{hint}</span>
+        <span className="truncate text-[10px] text-white/25">{hint}</span>
       ) : null}
     </span>
   );
 }
 
 const inputClass =
-  "w-full rounded-md border border-base-500 bg-base-900 px-3 py-2 text-sm text-neutral-100 " +
-  "placeholder:text-neutral-600 outline-none transition focus:border-accent " +
-  "focus:ring-1 focus:ring-accent/40 disabled:opacity-50";
+  "w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm text-white/90 " +
+  "placeholder:text-white/20 outline-none transition focus:border-accent/60 " +
+  "focus:bg-black/60 disabled:opacity-40";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputClass} ${props.className ?? ""}`} />;
@@ -83,11 +114,12 @@ export function SubmitButton({
 
   const styles = {
     primary:
-      "bg-accent text-white hover:bg-accent-bright disabled:bg-accent/40",
+      "border border-accent/40 bg-accent/15 text-accent-bright hover:bg-accent/25 " +
+      "disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30",
     ghost:
-      "border border-base-500 bg-transparent text-neutral-300 hover:border-neutral-500 hover:text-white",
+      "border border-white/10 text-white/50 hover:bg-white/10 hover:text-white",
     danger:
-      "border border-red-500/60 bg-red-950/40 text-red-200 hover:bg-red-900/50",
+      "border border-red-400/30 bg-red-500/5 text-red-300/80 hover:bg-red-500/15 hover:text-red-200",
   }[variant];
 
   return (
@@ -95,8 +127,9 @@ export function SubmitButton({
       {...rest}
       type={rest.type ?? "submit"}
       disabled={pending || rest.disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm
-        font-medium transition disabled:cursor-not-allowed ${styles} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-[2px] px-4 py-2
+        text-[11px] uppercase tracking-wide2 transition disabled:cursor-not-allowed
+        ${styles} ${className}`}
     >
       {pending && pendingLabel ? pendingLabel : children}
     </button>
@@ -112,11 +145,15 @@ export function Alert({
 }) {
   if (!children) return null;
   const styles = {
-    error: "border-red-500/50 bg-red-950/40 text-red-200",
-    notice: "border-emerald-500/40 bg-emerald-950/30 text-emerald-200",
-    info: "border-base-500 bg-base-800 text-neutral-300",
+    error: "border-red-400/30 bg-red-500/5 text-red-200/90",
+    notice: "border-accent/30 bg-accent/10 text-accent-bright",
+    info: "border-white/10 bg-white/[0.03] text-white/55",
   }[kind];
   return (
-    <p className={`rounded-md border px-3 py-2 text-sm ${styles}`}>{children}</p>
+    <p
+      className={`rounded-[2px] border px-3 py-2 text-xs leading-relaxed ${styles}`}
+    >
+      {children}
+    </p>
   );
 }

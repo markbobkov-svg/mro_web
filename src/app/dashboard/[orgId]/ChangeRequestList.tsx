@@ -10,8 +10,8 @@ const EMPTY: ActionState = {};
 export function ChangeRequestList({ org }: { org: DashboardOrg }) {
   if (org.changeRequests.length === 0) {
     return (
-      <div className="rounded-xl border border-base-600 bg-base-800 p-5">
-        <p className="text-sm text-neutral-500">
+      <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
+        <p className="text-sm text-white/35">
           Nothing submitted yet. Proposals you send from the sections above show
           up here with their status.
         </p>
@@ -24,29 +24,29 @@ export function ChangeRequestList({ org }: { org: DashboardOrg }) {
       {org.changeRequests.map((r) => (
         <li
           key={r.id}
-          className="rounded-lg border border-base-600 bg-base-800 px-4 py-3"
+          className="rounded-[2px] border border-white/10 bg-[#141414]/60 px-4 py-3"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-neutral-100">
+              <p className="text-sm text-white/90">
                 <StatusDot status={r.status} />
                 {describe(r)}
               </p>
               {summarise(r) ? (
-                <p className="mt-1 text-xs text-neutral-500">{summarise(r)}</p>
+                <p className="mt-1 text-xs text-white/35">{summarise(r)}</p>
               ) : null}
               {r.note ? (
-                <p className="mt-1 text-xs italic text-neutral-600">“{r.note}”</p>
+                <p className="mt-1 text-xs italic text-white/25">“{r.note}”</p>
               ) : null}
               {r.reviewNote ? (
-                <p className="mt-1 text-xs text-neutral-400">
+                <p className="mt-1 text-xs text-white/45">
                   Reviewer: {r.reviewNote}
                 </p>
               ) : null}
             </div>
 
             <div className="flex shrink-0 items-center gap-3">
-              <span className="text-xs text-neutral-600">
+              <span className="text-xs text-white/25">
                 {formatDate(r.createdAt)}
               </span>
               {r.status === "pending" ? (
@@ -119,7 +119,7 @@ function WithdrawButton({
       <input type="hidden" name="requestId" value={requestId} />
       <button
         type="submit"
-        className="text-xs text-neutral-500 transition hover:text-red-300"
+        className="text-xs text-white/35 transition hover:text-red-300"
         title={state.error ?? "Withdraw this request"}
       >
         Withdraw

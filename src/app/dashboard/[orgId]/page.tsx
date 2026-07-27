@@ -46,13 +46,13 @@ export default async function OrganisationDashboard({
       <div>
         <Link
           href="/dashboard"
-          className="text-xs text-neutral-500 transition hover:text-neutral-300"
+          className="text-xs text-white/35 transition hover:text-white/70"
         >
           ← Your organisations
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-white">{org.name}</h1>
+        <h1 className="mt-2 text-lg font-normal tracking-wide2 text-white">{org.name}</h1>
         {org.legalName && org.legalName !== org.name ? (
-          <p className="text-sm text-neutral-500">{org.legalName}</p>
+          <p className="text-sm text-white/35">{org.legalName}</p>
         ) : null}
       </div>
 
@@ -74,8 +74,8 @@ export default async function OrganisationDashboard({
           <a
             key={href}
             href={href}
-            className="rounded-md border border-base-600 px-3 py-1.5 text-neutral-400
-              transition hover:border-base-500 hover:text-white"
+            className="rounded-[2px] border border-white/10 px-3 py-1.5 text-white/45
+              transition hover:border-white/10 hover:text-white"
           >
             {label}
           </a>
@@ -114,8 +114,8 @@ export default async function OrganisationDashboard({
 function SectionHeading({ title, note }: { title: string; note: string }) {
   return (
     <div className="mb-3">
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
-      <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{note}</p>
+      <h2 className="text-sm font-medium text-white">{title}</h2>
+      <p className="mt-0.5 text-xs leading-relaxed text-white/35">{note}</p>
     </div>
   );
 }

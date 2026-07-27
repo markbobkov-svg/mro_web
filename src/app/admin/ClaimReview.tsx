@@ -25,22 +25,22 @@ export function ClaimReview({
   const isOwnClaim = claim.userId === currentAdminId;
 
   return (
-    <div className="rounded-xl border border-base-600 bg-base-800 p-5">
+    <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">
             {claim.organisationName ?? claim.proposedName ?? "Unnamed"}
             {isNew ? (
-              <span className="ml-2 rounded border border-amber-500/50 bg-amber-950/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-amber-300">
+              <span className="ml-2 rounded-[2px] border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide2 text-amber-300/90">
                 new organisation
               </span>
             ) : null}
           </p>
-          <p className="mt-1 text-xs text-neutral-400">
+          <p className="mt-1 text-xs text-white/45">
             requested by {claim.userEmail ?? claim.userId}
           </p>
         </div>
-        <span className="text-xs text-neutral-600">
+        <span className="text-xs text-white/25">
           {formatDate(claim.createdAt)}
         </span>
       </div>
@@ -56,12 +56,12 @@ export function ClaimReview({
       ) : null}
 
       {claim.contactNote ? (
-        <p className="mt-3 rounded-md border border-base-500 bg-base-900 px-3 py-2 text-xs leading-relaxed text-neutral-300">
+        <p className="mt-3 rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-xs leading-relaxed text-white/70">
           {claim.contactNote}
         </p>
       ) : null}
 
-      <p className="mt-3 text-xs text-neutral-500">
+      <p className="mt-3 text-xs text-white/35">
         The e-mail domain did not match this organisation, so nothing was
         granted automatically. Check that the person actually works there before
         approving.
@@ -87,7 +87,7 @@ export function ClaimReview({
         />
         <div className="flex flex-wrap gap-2">
           {isOwnClaim ? (
-            <p className="rounded-md border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+            <p className="rounded-[2px] border border-amber-400/30 bg-amber-400/[0.07] px-3 py-2 text-xs leading-relaxed text-amber-300/90">
               This is your own claim — another administrator has to approve it.
               You can still reject it to withdraw.
             </p>
@@ -117,8 +117,8 @@ function Row({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
     <div className="flex gap-2">
-      <dt className="shrink-0 text-neutral-500">{label}</dt>
-      <dd className="min-w-0 truncate text-neutral-300">{value}</dd>
+      <dt className="shrink-0 text-white/35">{label}</dt>
+      <dd className="min-w-0 truncate text-white/70">{value}</dd>
     </div>
   );
 }

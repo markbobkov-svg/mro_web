@@ -43,13 +43,22 @@ contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
    **DNS only** (grey cloud) so traffic isn't double-proxied; the tiles
    subdomain, by contrast, *should* stay proxied (orange cloud) for the CDN.
 3. Refresh the PMTiles extract when the OSM snapshot gets stale.
-4. **Custom SMTP before opening the dashboard to organisations.** Supabase's
-   built-in mailer is rate-limited to a handful of messages an hour and on new
-   projects only delivers to the project team's own addresses — so real
-   organisations would never receive their confirmation link, and without a
-   confirmed address the domain check proves nothing. Set up Resend / Postmark
-   / SES under Authentication → Emails, and set `NEXT_PUBLIC_SITE_URL` so the
-   links point at the real domain.
+4. **Custom SMTP — this gates opening the dashboard to organisations.**
+   Supabase's built-in mailer is rate-limited to a handful of messages an hour
+   and on new projects only delivers to the project team's own addresses. So a
+   real organisation never receives its confirmation link, and an unconfirmed
+   address makes the whole claim flow meaningless: the domain check only proves
+   something because confirming the address proves it is yours. Anyone could
+   otherwise type `someone@lufthansa-technik.com` at sign-up and be auto-approved.
+   Until this is done, the dashboard works for admins and for hand-confirmed
+   accounts (`email_confirm: true` via the admin API) but **must not be
+   advertised to organisations**.
+   Fix: Authentication → Emails → set up Resend / Postmark / SES, then remove
+   this item.
+5. **Set `NEXT_PUBLIC_SITE_URL` in Vercel.** Without it the confirmation and
+   password-reset links fall back to `VERCEL_URL`, the per-deployment hostname
+   — the links work but look wrong, and preview hostnames sit behind Vercel SSO.
+   Depends on item 2 (domain attached).
 
 ## Decisions already taken — don't redo
 

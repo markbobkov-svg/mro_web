@@ -9,41 +9,74 @@ import {
   PANEL_OFFSET_PX,
 } from "@/lib/basemap";
 
-// MapLibre GL is loaded from a CDN at runtime (the same way the Protomaps demo
-// does) rather than bundled — this avoids the Next.js/webpack worker-bundling
-// issue that left the canvas blank when maplibre-gl was imported as a module.
-const MAPLIBRE_VER = "5.0.1";
-const MAPLIBRE_JS = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VER}/dist/maplibre-gl.js`;
-const MAPLIBRE_CSS = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VER}/dist/maplibre-gl.css`;
+// maplibre-gl + pmtiles + @protomaps/basemaps are loaded from a CDN at runtime
+// (the same setup as the Protomaps demo). Loading maplibre this way also sizes
+// its worker correctly; the container-height fix (wrapper below) is what makes
+// it paint.
+const CDN = {
+  maplibreJs: "https://unpkg.com/maplibre-gl@5.0.1/dist/maplibre-gl.js",
+  maplibreCss: "https://unpkg.com/maplibre-gl@5.0.1/dist/maplibre-gl.css",
+  pmtiles: "https://unpkg.com/pmtiles@4.2.1/dist/pmtiles.js",
+  basemaps: "https://unpkg.com/@protomaps/basemaps@5.7.2/dist/basemaps.js",
+};
 
-// Free CARTO "dark matter" VECTOR style (GPU, smooth zoom) — no API token.
-const VECTOR_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+// Protomaps "black" basemap — a very dark vector theme; English labels.
+const PMTILES_URL = "pmtiles://https://demo-bucket.protomaps.com/v4.pmtiles";
+const GLYPHS =
+  "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
+const SPRITE = "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
+const ATTRIB =
+  '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
 
-let maplibrePromise: Promise<any> | null = null;
-function loadMaplibre(): Promise<any> {
-  if (typeof window === "undefined") return Promise.reject(new Error("ssr"));
-  const w = window as any;
-  if (w.maplibregl) return Promise.resolve(w.maplibregl);
-  if (maplibrePromise) return maplibrePromise;
-  maplibrePromise = new Promise((resolve, reject) => {
-    if (!document.querySelector(`link[href="${MAPLIBRE_CSS}"]`)) {
-      const css = document.createElement("link");
-      css.rel = "stylesheet";
-      css.href = MAPLIBRE_CSS;
-      document.head.appendChild(css);
-    }
+interface Libs {
+  maplibregl: any;
+  pmtiles: any;
+  basemaps: any;
+}
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
     const s = document.createElement("script");
-    s.src = MAPLIBRE_JS;
+    s.src = src;
     s.async = true;
-    s.onload = () =>
-      w.maplibregl
-        ? resolve(w.maplibregl)
-        : reject(new Error("maplibregl missing after load"));
-    s.onerror = () => reject(new Error("failed to load maplibre-gl"));
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`failed to load ${src}`));
     document.head.appendChild(s);
   });
-  return maplibrePromise;
+}
+
+let libsPromise: Promise<Libs> | null = null;
+function loadLibs(): Promise<Libs> {
+  if (typeof window === "undefined") return Promise.reject(new Error("ssr"));
+  const w = window as any;
+  if (w.maplibregl && w.pmtiles && w.basemaps) {
+    return Promise.resolve({
+      maplibregl: w.maplibregl,
+      pmtiles: w.pmtiles,
+      basemaps: w.basemaps,
+    });
+  }
+  if (libsPromise) return libsPromise;
+  libsPromise = (async () => {
+    if (!document.querySelector(`link[href="${CDN.maplibreCss}"]`)) {
+      const l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = CDN.maplibreCss;
+      document.head.appendChild(l);
+    }
+    await loadScript(CDN.maplibreJs);
+    await Promise.all([loadScript(CDN.pmtiles), loadScript(CDN.basemaps)]);
+    if (!w.maplibregl || !w.pmtiles || !w.basemaps) {
+      throw new Error("map libraries missing after load");
+    }
+    return {
+      maplibregl: w.maplibregl,
+      pmtiles: w.pmtiles,
+      basemaps: w.basemaps,
+    };
+  })();
+  return libsPromise;
 }
 
 const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
@@ -109,19 +142,38 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
       rebuildRef.current = rebuildMarkers;
 
       (async () => {
-        let maplibregl: any;
+        let libs: Libs;
         try {
-          maplibregl = await loadMaplibre();
+          libs = await loadLibs();
         } catch {
           if (!cancelled) onFail?.();
           return;
         }
         if (cancelled || !containerRef.current || mapRef.current) return;
+        const { maplibregl, pmtiles, basemaps } = libs;
         glRef.current = maplibregl;
+        // register the pmtiles:// protocol once per maplibre instance
+        if (!maplibregl.__pmtilesRegistered) {
+          const protocol = new pmtiles.Protocol();
+          maplibregl.addProtocol("pmtiles", protocol.tile);
+          maplibregl.__pmtilesRegistered = true;
+        }
         try {
           map = new maplibregl.Map({
             container: containerRef.current,
-            style: VECTOR_STYLE,
+            style: {
+              version: 8,
+              glyphs: GLYPHS,
+              sprite: SPRITE,
+              sources: {
+                protomaps: { type: "vector", url: PMTILES_URL, attribution: ATTRIB },
+              },
+              layers: basemaps.layers(
+                "protomaps",
+                basemaps.namedFlavor("black"),
+                { lang: "en" },
+              ),
+            },
             center: [10, 50],
             zoom: 4,
             minZoom: 2,

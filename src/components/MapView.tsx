@@ -142,7 +142,7 @@ export default function MapView({ markers, loadError }: Props) {
 
         {/* search box */}
         <div className="pointer-events-auto relative">
-          <div className="flex items-center gap-2 rounded-[2px] border border-white/10 bg-base-900/80 px-3 py-2 backdrop-blur-md transition focus-within:border-accent/60">
+          <div className="flex items-center gap-2 rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-xl transition focus-within:border-accent/60 focus-within:bg-[#141414]/60">
             <svg
               width="16"
               height="16"
@@ -178,7 +178,7 @@ export default function MapView({ markers, loadError }: Props) {
           </div>
 
           {searchFocused && searchResults.length > 0 && (
-            <div className="scroll-thin absolute mt-2 max-h-80 w-full overflow-y-auto rounded-[2px] border border-white/10 bg-base-900/95 py-1 shadow-2xl backdrop-blur-md">
+            <div className="scroll-thin absolute mt-2 max-h-80 w-full overflow-y-auto rounded-[2px] border border-white/10 bg-[#141414]/80 py-1 shadow-2xl backdrop-blur-xl">
               {searchResults.map((m) => (
                 <button
                   key={m.id}

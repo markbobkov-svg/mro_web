@@ -49,7 +49,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
   const multiGroup = groups.length > 1;
 
   return (
-    <div className="group rounded-[2px] border border-white/10 bg-base-800/70 p-4 transition hover:border-white/20 hover:bg-base-800">
+    <div className="px-2 py-4">
       {/* header */}
       <div className="min-w-0">
         <h3 className="text-sm font-medium leading-snug text-white">
@@ -92,7 +92,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
 
       {/* selected authority: certificates + scope */}
       {auth && (
-        <div className="mt-3 rounded-[2px] border border-accent/25 bg-accent/[0.06] px-3 py-2.5">
+        <div className="mt-3 rounded-[2px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
           <div className="text-[10px] font-semibold uppercase tracking-wide2 text-accent-bright">
             {auth.isEasa ? "EASA" : auth.code}
             {auth.name && auth.name !== auth.code ? (

@@ -22,7 +22,7 @@ export default function AirportPanel({
   const orgs = detail?.organisations ?? [];
 
   return (
-    <aside className="animate-slide-in absolute right-0 top-0 z-[700] flex h-full w-full flex-col border-l border-white/10 bg-base-900/95 backdrop-blur-xl sm:w-[420px] md:w-[630px]">
+    <aside className="animate-slide-in absolute right-0 top-0 z-[700] flex h-full w-full flex-col border-l border-white/10 bg-[#141414]/95 backdrop-blur-xl sm:w-[420px] md:w-[630px]">
       {/* header */}
       <div className="relative border-b border-white/10 px-6 pb-5 pt-6">
         <button
@@ -86,9 +86,14 @@ export default function AirportPanel({
               {orgs.length}{" "}
               {orgs.length === 1 ? "organisation" : "organisations"}
             </p>
-            <div className="flex flex-col gap-3">
-              {orgs.map((org) => (
-                <OrgCard key={org.stationId} org={org} />
+            <div className="flex flex-col">
+              {orgs.map((org, i) => (
+                <div key={org.stationId}>
+                  {i > 0 && (
+                    <div className="mx-3 border-t border-white/10" aria-hidden />
+                  )}
+                  <OrgCard org={org} />
+                </div>
               ))}
             </div>
           </>

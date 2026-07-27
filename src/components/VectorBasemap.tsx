@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import "maplibre-gl/dist/maplibre-gl.css";
 import {
   BasemapHandle,
   BasemapProps,
@@ -12,16 +13,10 @@ import {
   MIN_ZOOM,
 } from "@/lib/basemap";
 
-// maplibre-gl + pmtiles + @protomaps/basemaps are loaded from a CDN at runtime
-// (the same setup as the Protomaps demo). Loading maplibre this way also sizes
-// its worker correctly; the container-height fix (wrapper below) is what makes
-// it paint.
-const CDN = {
-  maplibreJs: "https://unpkg.com/maplibre-gl@5.0.1/dist/maplibre-gl.js",
-  maplibreCss: "https://unpkg.com/maplibre-gl@5.0.1/dist/maplibre-gl.css",
-  pmtiles: "https://unpkg.com/pmtiles@4.2.1/dist/pmtiles.js",
-  basemaps: "https://unpkg.com/@protomaps/basemaps@5.7.2/dist/basemaps.js",
-};
+// maplibre-gl + pmtiles + @protomaps/basemaps ship as npm dependencies and are
+// pulled in with dynamic import(): they land in their own chunk served from our
+// own origin (no extra DNS/TLS round trips to a CDN, no third-party uptime
+// dependency) and stay out of the initial bundle.
 
 // Protomaps "black" basemap — a very dark vector theme; English labels.
 // The PMTiles are served same-origin through our /api/basemap proxy (the
@@ -61,46 +56,20 @@ interface Libs {
   basemaps: any;
 }
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`failed to load ${src}`));
-    document.head.appendChild(s);
-  });
-}
-
 let libsPromise: Promise<Libs> | null = null;
 function loadLibs(): Promise<Libs> {
   if (typeof window === "undefined") return Promise.reject(new Error("ssr"));
-  const w = window as any;
-  if (w.maplibregl && w.pmtiles && w.basemaps) {
-    return Promise.resolve({
-      maplibregl: w.maplibregl,
-      pmtiles: w.pmtiles,
-      basemaps: w.basemaps,
-    });
-  }
   if (libsPromise) return libsPromise;
   libsPromise = (async () => {
-    if (!document.querySelector(`link[href="${CDN.maplibreCss}"]`)) {
-      const l = document.createElement("link");
-      l.rel = "stylesheet";
-      l.href = CDN.maplibreCss;
-      document.head.appendChild(l);
-    }
-    await loadScript(CDN.maplibreJs);
-    await Promise.all([loadScript(CDN.pmtiles), loadScript(CDN.basemaps)]);
-    if (!w.maplibregl || !w.pmtiles || !w.basemaps) {
-      throw new Error("map libraries missing after load");
-    }
+    const [maplibreMod, pmtilesMod, basemapsMod] = await Promise.all([
+      import("maplibre-gl"),
+      import("pmtiles"),
+      import("@protomaps/basemaps"),
+    ]);
     return {
-      maplibregl: w.maplibregl,
-      pmtiles: w.pmtiles,
-      basemaps: w.basemaps,
+      maplibregl: (maplibreMod as any).default ?? maplibreMod,
+      pmtiles: pmtilesMod,
+      basemaps: basemapsMod,
     };
   })();
   return libsPromise;

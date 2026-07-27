@@ -1,15 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { OrgAtAirport } from "@/lib/types";
 
-const SCOPE_PREVIEW = 14;
-
-const LOCATION_STYLE: Record<string, string> = {
-  line: "bg-emerald-400/10 text-emerald-300",
-  base: "bg-amber-400/10 text-amber-300",
-  both: "bg-accent/15 text-accent-bright",
-};
+const SCOPE_PREVIEW = 16;
 
 // Ratings printed as small badges next to a certificate — only the short, clean
 // EASA codes (A1, B1, C4, D1…); long descriptive ratings live in the scope list.
@@ -35,41 +29,36 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
     setExpanded(false);
   };
 
-  // scope items for the current authority + class selection
-  const items = useMemo(() => {
-    if (!auth) return [];
-    const groups = cls
+  // classes to show for the current filter, then a preview slice across them
+  const groups = auth
+    ? cls
       ? auth.classes.filter((c) => c.label === cls)
-      : auth.classes;
-    return groups.flatMap((c) => c.items);
-  }, [auth, cls]);
-
-  const shown = expanded ? items : items.slice(0, SCOPE_PREVIEW);
-  const hiddenCount = items.length - shown.length;
+      : auth.classes
+    : [];
+  const totalItems = groups.reduce((n, g) => n + g.items.length, 0);
+  let budget = expanded ? Infinity : SCOPE_PREVIEW;
+  const blocks = groups
+    .map((g) => {
+      const take = budget === Infinity ? g.items.length : Math.min(g.items.length, budget);
+      if (budget !== Infinity) budget -= take;
+      return { group: g, items: g.items.slice(0, take) };
+    })
+    .filter((b) => b.items.length > 0);
+  const shownItems = blocks.reduce((n, b) => n + b.items.length, 0);
+  const hidden = totalItems - shownItems;
+  const multiGroup = groups.length > 1;
 
   return (
     <div className="group rounded-[2px] border border-white/10 bg-base-800/70 p-4 transition hover:border-white/20 hover:bg-base-800">
       {/* header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-medium leading-snug text-white">
-            {org.name}
-          </h3>
-          {org.legalName && org.legalName !== org.name && (
-            <p className="mt-0.5 truncate text-xs text-white/40">
-              {org.legalName}
-            </p>
-          )}
-        </div>
-        {org.locationScope && (
-          <span
-            className={
-              "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 " +
-              (LOCATION_STYLE[org.locationScope] ?? "bg-white/10 text-white/60")
-            }
-          >
-            {org.locationScope}
-          </span>
+      <div className="min-w-0">
+        <h3 className="text-sm font-medium leading-snug text-white">
+          {org.name}
+        </h3>
+        {org.legalName && org.legalName !== org.name && (
+          <p className="mt-0.5 truncate text-xs text-white/40">
+            {org.legalName}
+          </p>
         )}
       </div>
 
@@ -104,15 +93,13 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
       {/* selected authority: certificates + scope */}
       {auth && (
         <div className="mt-3 rounded-[2px] border border-accent/25 bg-accent/[0.06] px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wide2 text-accent-bright">
-              {auth.isEasa ? "EASA" : auth.code}
-              {auth.name && auth.name !== auth.code ? (
-                <span className="ml-1.5 font-normal normal-case tracking-normal text-white/40">
-                  {auth.name}
-                </span>
-              ) : null}
-            </span>
+          <div className="text-[10px] font-semibold uppercase tracking-wide2 text-accent-bright">
+            {auth.isEasa ? "EASA" : auth.code}
+            {auth.name && auth.name !== auth.code ? (
+              <span className="ml-1.5 font-normal normal-case tracking-normal text-white/40">
+                {auth.name}
+              </span>
+            ) : null}
           </div>
 
           {/* certificate references under this authority */}
@@ -164,7 +151,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
             })}
           </div>
 
-          {/* scope, filterable by class */}
+          {/* scope, filterable by class, rendered as a vertical list */}
           {auth.classes.length > 0 && (
             <div className="mt-3">
               <p className="mb-1.5 text-[10px] uppercase tracking-wide2 text-white/35">
@@ -174,7 +161,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
               <div className="mb-2 flex flex-wrap gap-1">
                 <ClassChip
                   label="All"
-                  count={auth.classes.reduce((n, c) => n + c.items.length, 0)}
+                  count={totalItemsAll(auth)}
                   active={cls === null}
                   onClick={() => selectClass(null)}
                 />
@@ -188,23 +175,58 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                   />
                 ))}
               </div>
-              {/* scope items */}
-              <div className="flex flex-wrap gap-1">
-                {shown.map((s, i) => (
-                  <span
-                    key={s + i}
-                    className="max-w-full truncate rounded-[2px] bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-white/75"
-                    title={s}
-                  >
-                    {s}
-                  </span>
+
+              {/* vertical scope list; aircraft classes get LINE / BASE columns */}
+              <div className="overflow-hidden rounded-[2px] border border-white/5">
+                {blocks.map((b, bi) => (
+                  <div key={b.group.label + bi}>
+                    {(multiGroup || b.group.isAircraft) && (
+                      <div className="flex items-center gap-2 bg-white/[0.03] px-2 py-1">
+                        <span
+                          className="min-w-0 flex-1 truncate text-[10px] font-medium uppercase tracking-wide2 text-white/45"
+                          title={b.group.label}
+                        >
+                          {multiGroup ? b.group.label : ""}
+                        </span>
+                        {b.group.isAircraft && (
+                          <>
+                            <span className="w-9 shrink-0 text-center text-[9px] uppercase tracking-wide2 text-white/35">
+                              Line
+                            </span>
+                            <span className="w-9 shrink-0 text-center text-[9px] uppercase tracking-wide2 text-white/35">
+                              Base
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {b.items.map((it, ii) => (
+                      <div
+                        key={ii}
+                        className="flex items-center gap-2 border-t border-white/5 px-2 py-1 text-[11px]"
+                      >
+                        <span
+                          className="min-w-0 flex-1 truncate text-white/75"
+                          title={it.text}
+                        >
+                          {it.text}
+                        </span>
+                        {b.group.isAircraft && (
+                          <>
+                            <Mark on={it.line} />
+                            <Mark on={it.base} />
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 ))}
-                {hiddenCount > 0 && (
+                {hidden > 0 && (
                   <button
                     onClick={() => setExpanded(true)}
-                    className="rounded-[2px] bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-accent-bright hover:bg-white/[0.08]"
+                    className="w-full border-t border-white/5 px-2 py-1 text-left text-[11px] text-accent-bright transition hover:bg-white/[0.05]"
                   >
-                    +{hiddenCount} more
+                    +{hidden} more
                   </button>
                 )}
               </div>
@@ -294,6 +316,22 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         </div>
       )}
     </div>
+  );
+}
+
+function totalItemsAll(auth: OrgAtAirport["authorities"][number]): number {
+  return auth.classes.reduce((n, c) => n + c.items.length, 0);
+}
+
+function Mark({ on }: { on: boolean }) {
+  return (
+    <span className="w-9 shrink-0 text-center">
+      {on ? (
+        <span className="text-accent-bright">✕</span>
+      ) : (
+        <span className="text-white/15">·</span>
+      )}
+    </span>
   );
 }
 

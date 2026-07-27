@@ -26,10 +26,19 @@ export interface Certificate {
   url: string | null; // link to the certificate / source document, if known
 }
 
+/** One scope line. line/base come from the DB's location_scope for the row. */
+export interface ScopeItem {
+  text: string;
+  line: boolean;
+  base: boolean;
+}
+
 /** A class rating group (e.g. 'A1' or 'Aircraft') and the scope it covers. */
 export interface ScopeClass {
   label: string;
-  items: string[];
+  /** Aircraft-type class (A1–A4 / 'Aircraft') — shown with LINE/BASE columns. */
+  isAircraft: boolean;
+  items: ScopeItem[];
 }
 
 /** All of an organisation's approvals + scope under one authority. */

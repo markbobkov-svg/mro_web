@@ -104,6 +104,13 @@ function classRank(label: string): number {
   return i === -1 ? 999 : i;
 }
 
+// Aircraft-type class (gets LINE/BASE columns in the UI): the EASA A1–A4 ratings
+// or any label mentioning "aircraft" (incl. the English-normalised labels).
+function isAircraftClass(label: string): boolean {
+  const l = label.trim();
+  return /aircraft/i.test(l) || /^A[1-4]\b/i.test(l);
+}
+
 // Scope text often repeats the class as a leading token, e.g.
 // "A1.A1 Jet engine.Boeing B737…" under class "A1". Drop that duplicate prefix.
 function cleanScopeText(text: string, cls: string): string {
@@ -130,7 +137,7 @@ async function fetchOrgScope(supabase: any, orgIds: string[]): Promise<any[]> {
     const { data, error } = await supabase
       .from("organisation_scope")
       .select(
-        "organisation_id, authority_id, organisation_approval_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, source_url",
+        "organisation_id, authority_id, organisation_approval_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope, source_url",
       )
       .in("organisation_id", orgIds)
       .range(from, from + PAGE - 1);
@@ -235,7 +242,8 @@ export async function getAirportDetail(
   // --- org-level scope: group org -> authority -> class -> items; collect cert links ---
   // Classes are keyed case-insensitively so scraped variants like
   // "Components…" and "COMPONENTS…" collapse into one group (first label wins).
-  type ClassGroup = { label: string; items: Set<string> };
+  type ScopeAcc = { text: string; line: boolean; base: boolean };
+  type ClassGroup = { label: string; items: Map<string, ScopeAcc> };
   const scopeByOrgAuth = new Map<
     string,
     Map<string, Map<string, ClassGroup>>
@@ -249,13 +257,22 @@ export async function getAirportDetail(
     const text = (sc.scope_text_en || sc.scope_text || "").trim();
     if (text) {
       const clsKey = cls.toLowerCase();
+      const ls = (sc.location_scope || "").toLowerCase();
+      const line = ls === "line" || ls === "both";
+      const base = ls === "base" || ls === "both";
+      const cleaned = cleanScopeText(text, cls);
       let am = scopeByOrgAuth.get(org);
       if (!am) { am = new Map(); scopeByOrgAuth.set(org, am); }
       let cm = am.get(auth);
       if (!cm) { cm = new Map(); am.set(auth, cm); }
       let grp = cm.get(clsKey);
-      if (!grp) { grp = { label: cls, items: new Set() }; cm.set(clsKey, grp); }
-      grp.items.add(cleanScopeText(text, cls));
+      if (!grp) { grp = { label: cls, items: new Map() }; cm.set(clsKey, grp); }
+      const itKey = cleaned.toLowerCase();
+      let it = grp.items.get(itKey);
+      if (!it) { it = { text: cleaned, line: false, base: false }; grp.items.set(itKey, it); }
+      // one aircraft can appear as separate line/base rows — OR the flags together
+      it.line = it.line || line;
+      it.base = it.base || base;
     }
     if (sc.source_url) {
       if (sc.organisation_approval_id && !urlByApproval.has(sc.organisation_approval_id)) {
@@ -338,7 +355,11 @@ export async function getAirportDetail(
       const classesMap = scopeMap?.get(authId);
       const classes: ScopeClass[] = classesMap
         ? Array.from(classesMap.values())
-            .map((g) => ({ label: g.label, items: Array.from(g.items) }))
+            .map((g) => ({
+              label: g.label,
+              isAircraft: isAircraftClass(g.label),
+              items: Array.from(g.items.values()),
+            }))
             .sort(
               (a, b) =>
                 classRank(a.label) - classRank(b.label) ||

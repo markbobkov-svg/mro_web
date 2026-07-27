@@ -216,7 +216,7 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
               [COVERAGE_BBOX.west, COVERAGE_BBOX.south],
               [COVERAGE_BBOX.east, COVERAGE_BBOX.north],
             ],
-            attributionControl: true,
+            attributionControl: false,
             dragRotate: false,
             pitchWithRotate: false,
           });

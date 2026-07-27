@@ -67,7 +67,7 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
           minZoom: MIN_ZOOM,
           maxZoom: MAX_ZOOM,
           zoomControl: false,
-          attributionControl: true,
+          attributionControl: false,
           // Match the vector map: keep the view within our coverage area.
           maxBounds: [
             [COVERAGE_BBOX.south, COVERAGE_BBOX.west],

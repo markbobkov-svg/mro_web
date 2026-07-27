@@ -1,37 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "leaflet/dist/leaflet.css";
 import type { AirportMarker, AirportDetail } from "@/lib/types";
+import { BasemapHandle, hasWebGL } from "@/lib/basemap";
 import AirportPanel from "./AirportPanel";
-
-// Free CARTO "dark matter" RASTER tiles — plain <img> tiles rendered by Leaflet
-// with no WebGL, so the dark world map shows in every browser regardless of GPU
-// / hardware-acceleration settings. CORS-enabled, no token.
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const TILE_ATTRIB =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+import RasterBasemap from "./RasterBasemap";
+import VectorBasemap from "./VectorBasemap";
 
 interface Props {
   markers: AirportMarker[];
   loadError: string | null;
 }
 
+type Engine = "vector" | "raster";
+
 export default function MapView({ markers, loadError }: Props) {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const leafletRef = useRef<any>(null);
-  const markerObjs = useRef<Map<string, any>>(new Map());
+  const basemapRef = useRef<BasemapHandle>(null);
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
   const activeIdRef = useRef<string | null>(null);
 
-  const [ready, setReady] = useState(false);
+  const [engine, setEngine] = useState<Engine | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AirportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+
+  // pick the engine on the client (vector needs WebGL; raster works everywhere)
+  useEffect(() => {
+    setEngine(hasWebGL() ? "vector" : "raster");
+  }, []);
 
   const totalOrgs = useMemo(
     () => markers.reduce((sum, m) => sum + m.orgCount, 0),
@@ -83,34 +82,15 @@ export default function MapView({ markers, loadError }: Props) {
     }
   }, []);
 
-  const setActiveMarkerClass = useCallback((id: string | null) => {
-    markerObjs.current.forEach((mk, key) => {
-      const el = mk.getElement?.();
-      if (el) el.classList.toggle("marker--active", key === id);
-    });
-  }, []);
-
   const selectAirport = useCallback(
     (id: string) => {
       activeIdRef.current = id;
       setActiveId(id);
-      setActiveMarkerClass(id);
       const m = markers.find((x) => x.id === id);
-      const map = mapRef.current;
-      if (m && map) {
-        const [lng, lat] = m.coordinates;
-        const targetZoom = Math.max(map.getZoom(), 8);
-        let center: any = [lat, lng];
-        // shift the target left so the pin isn't hidden behind the right panel
-        if (typeof window !== "undefined" && window.innerWidth >= 640) {
-          const pt = map.project([lat, lng], targetZoom).subtract([210, 0]);
-          center = map.unproject(pt, targetZoom);
-        }
-        map.flyTo(center, targetZoom, { duration: 0.8 });
-      }
+      if (m) basemapRef.current?.flyTo(m);
       loadDetail(id);
     },
-    [markers, loadDetail, setActiveMarkerClass],
+    [markers, loadDetail],
   );
 
   const closePanel = useCallback(() => {
@@ -118,98 +98,9 @@ export default function MapView({ markers, loadError }: Props) {
     setActiveId(null);
     setDetail(null);
     setDetailError(null);
-    setActiveMarkerClass(null);
-  }, [setActiveMarkerClass]);
-
-  // Initialise the map once.
-  useEffect(() => {
-    let cancelled = false;
-    let map: any;
-    (async () => {
-      const L = (await import("leaflet")).default;
-      leafletRef.current = L;
-      if (cancelled || !mapContainer.current || mapRef.current) return;
-      map = L.map(mapContainer.current, {
-        center: [50, 10],
-        zoom: 4,
-        minZoom: 2,
-        maxZoom: 18,
-        zoomControl: false,
-        worldCopyJump: true,
-        attributionControl: true,
-        // default wheel zoom (one level per notch) — clear and reliable; the
-        // smooth feel comes from Leaflet's zoom animation + the tile options.
-      });
-      L.tileLayer(TILE_URL, {
-        subdomains: "abcd",
-        maxZoom: 20,
-        attribution: TILE_ATTRIB,
-        crossOrigin: true,
-        // Preload a wide ring so zooming out / panning doesn't reveal blanks.
-        keepBuffer: 6,
-        // Failed/rate-limited tiles render as a solid dark pixel (the map's own
-        // colour, #0a0e16) instead of the browser's white broken-image box.
-        errorTileUrl:
-          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPg4hMDAABUAC9qIiHaAAAAAElFTkSuQmCC",
-      }).addTo(map);
-      L.control.zoom({ position: "bottomright" }).addTo(map);
-      mapRef.current = map;
-
-      // Scale the airport points with the zoom level via the --mk CSS variable.
-      const applyMarkerScale = () => {
-        const z = map.getZoom();
-        // Cap at the original size (1×) when zoomed in; shrink below 1× as you
-        // zoom out so the dense clusters stop overlapping.
-        const scale = Math.max(0.4, Math.min(1, 1 - (7 - z) * 0.13));
-        mapContainer.current?.style.setProperty("--mk", scale.toFixed(3));
-      };
-      applyMarkerScale();
-      map.on("zoom", applyMarkerScale);
-      map.on("zoomend", applyMarkerScale);
-
-      // container may have been 0-sized during hydration
-      setTimeout(() => {
-        if (!cancelled && mapRef.current) mapRef.current.invalidateSize();
-      }, 0);
-      setReady(true);
-    })();
-    return () => {
-      cancelled = true;
-      if (map) map.remove();
-      mapRef.current = null;
-    };
   }, []);
 
-  // Place markers once the map is ready (or when the data changes).
-  useEffect(() => {
-    if (!ready || !mapRef.current || !leafletRef.current) return;
-    const L = leafletRef.current;
-    const map = mapRef.current;
-
-    markerObjs.current.forEach((mk) => map.removeLayer(mk));
-    markerObjs.current.clear();
-
-    for (const m of markers) {
-      const [lng, lat] = m.coordinates;
-      const icon = L.divIcon({
-        className: "marker" + (m.orgCount >= 5 ? " marker--lg" : ""),
-        html: '<span class="marker__scale"><span class="marker__pulse"></span><span class="marker__dot"></span></span>',
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      });
-      const code = m.iata ?? m.icao ?? "";
-      const marker = L.marker([lat, lng], {
-        icon,
-        title: `${code ? code + " — " : ""}${m.name}${
-          m.city ? ", " + m.city : ""
-        } · ${m.orgCount} MRO`,
-        keyboard: false,
-      });
-      marker.on("click", () => selectAirport(m.id));
-      marker.addTo(map);
-      markerObjs.current.set(m.id, marker);
-    }
-  }, [ready, markers, selectAirport]);
+  const onVectorFail = useCallback(() => setEngine("raster"), []);
 
   const activeMarker = activeId
     ? markers.find((m) => m.id === activeId) ?? null
@@ -217,7 +108,23 @@ export default function MapView({ markers, loadError }: Props) {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
-      <div ref={mapContainer} className="absolute inset-0 z-0" />
+      {engine === "vector" && (
+        <VectorBasemap
+          ref={basemapRef}
+          markers={markers}
+          activeId={activeId}
+          onSelect={selectAirport}
+          onFail={onVectorFail}
+        />
+      )}
+      {engine === "raster" && (
+        <RasterBasemap
+          ref={basemapRef}
+          markers={markers}
+          activeId={activeId}
+          onSelect={selectAirport}
+        />
+      )}
 
       {/* top scrim for legibility */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] h-40 bg-gradient-to-b from-black/80 to-transparent" />
@@ -225,10 +132,10 @@ export default function MapView({ markers, loadError }: Props) {
       {/* brand + search */}
       <div className="absolute left-0 top-0 z-[500] flex w-full max-w-md flex-col gap-4 p-5 sm:p-6">
         <div className="pointer-events-none select-none">
-          <h1 className="text-lg font-medium tracking-brand text-white sm:text-xl">
+          <h1 className="text-lg font-normal tracking-brand text-white sm:text-xl">
             MRO&nbsp;FINDER
           </h1>
-          <p className="mt-1 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
+          <p className="mt-1.5 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
             Part-145 · Line Maintenance · Europe
           </p>
         </div>

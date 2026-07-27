@@ -234,3 +234,15 @@ body {
   color: rgba(200, 210, 225, 0.7) !important;
   font-size: 10px !important;
 }
+
+/* ---- Mobile: no zoom buttons ----
+   Phones zoom with a pinch, so the +/- group is dead weight — and it sits right
+   where the bottom search bar and the panel need the room. Hidden with CSS (not
+   skipped at map init) so it comes back on rotate/resize without re-creating
+   the map. Below Tailwind's `sm` breakpoint. */
+@media (max-width: 639px) {
+  .maplibregl-ctrl-group,
+  .leaflet-control-zoom {
+    display: none !important;
+  }
+}

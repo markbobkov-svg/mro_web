@@ -26,10 +26,31 @@ export default function MapView({ markers, loadError }: Props) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   // pick the engine on the client (vector needs WebGL; raster works everywhere)
   useEffect(() => {
     setEngine(hasWebGL() ? "vector" : "raster");
+  }, []);
+
+  // On phones the search bar sits at the bottom of the screen, where the
+  // on-screen keyboard would cover it. The visual viewport tells us how much of
+  // the layout viewport the keyboard eats, so the bar can be lifted above it.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => {
+      const hidden = window.innerHeight - vv.height - vv.offsetTop;
+      // ignore small deltas — browser chrome (URL bar) collapsing is not a keyboard
+      setKeyboardInset(hidden > 80 ? Math.round(hidden) : 0);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
   }, []);
 
   const totalOrgs = useMemo(
@@ -106,6 +127,18 @@ export default function MapView({ markers, loadError }: Props) {
     ? markers.find((m) => m.id === activeId) ?? null
     : null;
 
+  const suggestionsOpen = searchFocused && searchResults.length > 0;
+
+  // rendered in two spots: above the search bar on mobile, bottom-left on ≥sm
+  const counts =
+    !loadError && markers.length > 0 ? (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{markers.length}</span> airports
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{totalOrgs}</span> stations
+      </p>
+    ) : null;
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {engine === "vector" && (
@@ -127,11 +160,23 @@ export default function MapView({ markers, loadError }: Props) {
       )}
 
       {/* top scrim for legibility */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] h-40 bg-gradient-to-b from-black/80 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] h-24 bg-gradient-to-b from-black/80 to-transparent sm:h-40" />
+      {/* bottom scrim — mobile only, where the search bar lives */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[400] h-36 bg-gradient-to-t from-black/85 to-transparent sm:hidden" />
 
-      {/* brand + search */}
-      <div className="absolute left-0 top-0 z-[500] flex w-full max-w-md flex-col gap-4 p-5 sm:p-6">
-        <div className="pointer-events-none select-none">
+      {/* Brand + search. ≥sm: stacked in the top-left corner. Mobile: the brand
+          stays up top and the search bar is pinned to the bottom of the screen,
+          within thumb reach (and lifted when the keyboard opens). */}
+      <div
+        className={`pointer-events-none absolute inset-0 z-[500] flex-col p-5 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] sm:inset-auto sm:left-0 sm:top-0 sm:flex sm:w-full sm:max-w-md sm:gap-4 sm:p-6 ${
+          // the panel is full-screen on mobile — don't let the bar glow through it
+          activeId ? "hidden" : "flex"
+        }`}
+        style={
+          keyboardInset ? { paddingBottom: keyboardInset + 12 } : undefined
+        }
+      >
+        <div className="select-none">
           <h1 className="text-lg font-normal tracking-brand text-white sm:text-xl">
             ONE<span className="text-accent-bright">4</span>FIVE
           </h1>
@@ -139,6 +184,14 @@ export default function MapView({ markers, loadError }: Props) {
             Part-145 · MRO · Europe
           </p>
         </div>
+
+        {/* pushes the search bar to the bottom edge on mobile only */}
+        <div className="flex-1 sm:hidden" />
+
+        {/* on mobile the suggestions open upwards, over this line — drop it */}
+        {counts && !suggestionsOpen && (
+          <div className="mb-2 select-none px-0.5 sm:hidden">{counts}</div>
+        )}
 
         {/* search box */}
         <div className="pointer-events-auto relative">
@@ -164,7 +217,8 @@ export default function MapView({ markers, loadError }: Props) {
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               placeholder="Search airport, city or code…"
-              className="w-full bg-transparent text-sm text-white placeholder:text-white/35 focus:outline-none"
+              // 16px on mobile keeps iOS from zooming the page in on focus
+              className="w-full bg-transparent text-base text-white placeholder:text-white/35 focus:outline-none sm:text-sm"
             />
             {search && (
               <button
@@ -177,8 +231,9 @@ export default function MapView({ markers, loadError }: Props) {
             )}
           </div>
 
-          {searchFocused && searchResults.length > 0 && (
-            <div className="scroll-thin absolute mt-2 max-h-80 w-full overflow-y-auto rounded-[2px] border border-white/10 bg-[#141414]/80 py-1 shadow-2xl backdrop-blur-xl">
+          {suggestionsOpen && (
+            /* opens upward on mobile (the bar is at the bottom), downward on ≥sm */
+            <div className="scroll-thin absolute bottom-full mb-2 max-h-[45vh] w-full overflow-y-auto rounded-[2px] border border-white/10 bg-[#141414]/80 py-1 shadow-2xl backdrop-blur-xl sm:bottom-auto sm:top-full sm:mb-0 sm:mt-2 sm:max-h-80">
               {searchResults.map((m) => (
                 <button
                   key={m.id}
@@ -213,14 +268,10 @@ export default function MapView({ markers, loadError }: Props) {
         </div>
       </div>
 
-      {/* bottom-left stats */}
-      {!loadError && markers.length > 0 && (
-        <div className="pointer-events-none absolute bottom-5 left-5 z-[500] select-none sm:bottom-6 sm:left-6">
-          <p className="text-[11px] uppercase tracking-wide2 text-white/45">
-            <span className="text-white/80">{markers.length}</span> airports
-            <span className="mx-2 text-white/20">/</span>
-            <span className="text-white/80">{totalOrgs}</span> stations
-          </p>
+      {/* bottom-left stats (≥sm — on mobile they sit above the search bar) */}
+      {counts && (
+        <div className="pointer-events-none absolute bottom-6 left-6 z-[500] hidden select-none sm:block">
+          {counts}
         </div>
       )}
 

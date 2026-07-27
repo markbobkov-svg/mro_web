@@ -11,6 +11,43 @@ function ratingCodes(ratings: string[]): string[] {
   return ratings.filter((r) => r && r.trim().length <= 5);
 }
 
+/** Certificate / source document — a page with a seal. */
+function CertificateIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5L14 3Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M13.8 3.2V7.5h4.4" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="12" cy="13.4" r="2.5" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M10.4 15.6 9.8 18.6l2.2-1.2 2.2 1.2-.6-3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Website — a globe (www). */
+function WwwIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="8.6" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M3.4 12h17.2" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 3.4c2.2 2.3 3.4 5.4 3.4 8.6S14.2 18.3 12 20.6C9.8 18.3 8.6 15.2 8.6 12S9.8 5.7 12 3.4Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
 export default function OrgCard({ org }: { org: OrgAtAirport }) {
   const [authIdx, setAuthIdx] = useState(0);
   const [cls, setCls] = useState<string | null>(null);
@@ -128,9 +165,11 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                         href={normaliseUrl(url)}
                         target="_blank"
                         rel="noreferrer"
-                        className="ml-auto shrink-0 text-[11px] text-accent-bright/90 transition hover:text-accent-bright"
+                        title="Open certificate"
+                        aria-label="Open certificate"
+                        className="ml-auto shrink-0 text-accent-bright/80 transition hover:text-accent-bright"
                       >
-                        Certificate ↗
+                        <CertificateIcon />
                       </a>
                     )}
                   </div>
@@ -287,9 +326,11 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
               href={normaliseUrl(org.website)}
               target="_blank"
               rel="noreferrer"
+              title="Open website"
+              aria-label="Open website"
               className="text-accent-bright/80 transition hover:text-accent-bright"
             >
-              Website ↗
+              <WwwIcon />
             </a>
           )}
         </div>
@@ -297,14 +338,16 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
 
       {/* website when contacts exist */}
       {org.contacts.length > 0 && org.website && (
-        <div className="mt-2 text-xs">
+        <div className="mt-2">
           <a
             href={normaliseUrl(org.website)}
             target="_blank"
             rel="noreferrer"
-            className="text-accent-bright/80 transition hover:text-accent-bright"
+            title="Open website"
+            aria-label="Open website"
+            className="inline-flex text-accent-bright/80 transition hover:text-accent-bright"
           >
-            Website ↗
+            <WwwIcon />
           </a>
         </div>
       )}

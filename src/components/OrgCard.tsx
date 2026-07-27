@@ -155,11 +155,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                         {c.reference}
                       </span>
                     )}
-                    {c.validUntil && (
-                      <span className="text-[10px] text-white/35">
-                        · valid to {c.validUntil}
-                      </span>
-                    )}
+                    {/* sits right after the approval reference it belongs to */}
                     {url && (
                       <a
                         href={normaliseUrl(url)}
@@ -167,10 +163,15 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                         rel="noreferrer"
                         title="Open certificate"
                         aria-label="Open certificate"
-                        className="ml-auto shrink-0 text-accent-bright/80 transition hover:text-accent-bright"
+                        className="-ml-0.5 shrink-0 text-accent-bright/80 transition hover:text-accent-bright"
                       >
                         <CertificateIcon />
                       </a>
+                    )}
+                    {c.validUntil && (
+                      <span className="text-[10px] text-white/35">
+                        · valid to {c.validUntil}
+                      </span>
                     )}
                   </div>
                   {codes.length > 0 && (

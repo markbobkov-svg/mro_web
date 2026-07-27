@@ -41,8 +41,9 @@ export default function MapView({ markers, loadError }: Props) {
     if (!vv) return;
     const update = () => {
       const hidden = window.innerHeight - vv.height - vv.offsetTop;
-      // ignore small deltas — browser chrome (URL bar) collapsing is not a keyboard
-      setKeyboardInset(hidden > 80 ? Math.round(hidden) : 0);
+      // A keyboard eats ~300px; anything smaller is browser chrome moving, so
+      // the threshold sits well clear of a toolbar's height.
+      setKeyboardInset(hidden > 150 ? Math.round(hidden) : 0);
     };
     update();
     vv.addEventListener("resize", update);
@@ -140,7 +141,7 @@ export default function MapView({ markers, loadError }: Props) {
     ) : null;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-black">
+    <div className="h-viewport relative w-screen overflow-hidden bg-black">
       {engine === "vector" && (
         <VectorBasemap
           ref={basemapRef}

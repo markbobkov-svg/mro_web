@@ -25,6 +25,17 @@ body {
   box-sizing: border-box;
 }
 
+/* Height of a full-screen shell.
+   iOS Safari resolves 100vh against the LARGE viewport — the size the page
+   would have if the browser toolbars were hidden — so the bottom of a 100vh
+   box (where the mobile search bar lives) ends up behind the toolbar. 100dvh
+   tracks the actually visible area; the 100vh line above stays as the
+   fallback for browsers without dvh (iOS < 15.4, Chrome < 108). */
+.h-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* ---- SpaceX-ish typographic helpers ---- */
 .tracking-brand {
   letter-spacing: 0.28em;

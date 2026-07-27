@@ -2,7 +2,7 @@
 // from crashing and tells whoever set it up exactly what to add.
 export default function SetupNotice() {
   return (
-    <main className="flex h-screen w-screen items-center justify-center bg-black px-6">
+    <main className="h-viewport flex w-screen items-center justify-center bg-black px-6">
       <div className="max-w-lg">
         <p className="mb-3 text-xs uppercase tracking-brand text-accent-bright">
           MRO Finder

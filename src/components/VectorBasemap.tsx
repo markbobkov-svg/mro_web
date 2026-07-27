@@ -30,6 +30,24 @@ const SPRITE = "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
 const ATTRIB =
   '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
 
+// Declutter the basemap for an aviation map: drop road lines/labels (keeping
+// only airport runways & taxiways), city/town/suburb labels, and buildings.
+// Country / region / water labels, borders and land/water stay for orientation.
+const HIDE_LAYERS = new Set([
+  "places_locality",
+  "places_subplace",
+  "buildings",
+  "address_label",
+]);
+const KEEP_ROADS = new Set(["roads_runway", "roads_taxiway"]);
+function tidyLayers(layers: any[]): any[] {
+  return layers.filter(
+    (l) =>
+      !HIDE_LAYERS.has(l.id) &&
+      !(l.id.startsWith("roads_") && !KEEP_ROADS.has(l.id)),
+  );
+}
+
 interface Libs {
   maplibregl: any;
   pmtiles: any;
@@ -174,10 +192,10 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
                   attribution: ATTRIB,
                 },
               },
-              layers: basemaps.layers(
-                "protomaps",
-                basemaps.namedFlavor("black"),
-                { lang: "en" },
+              layers: tidyLayers(
+                basemaps.layers("protomaps", basemaps.namedFlavor("black"), {
+                  lang: "en",
+                }),
               ),
             },
             center: [10, 50],

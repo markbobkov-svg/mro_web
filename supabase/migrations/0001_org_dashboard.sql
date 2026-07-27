@@ -73,6 +73,60 @@ as $$
   );
 $$;
 
+/*
+ * Keep `is_admin` out of reach of the person it describes.
+ *
+ * The self-service policy below has to let a user edit their own app_users row
+ * (name, job title, phone) — and is_admin sits on that same row, so without
+ * this guard "update app_users set is_admin = true where id = <me>" would be a
+ * legal self-update. That is the whole ball game: an admin approves claims,
+ * including their own.
+ *
+ * A trigger rather than a policy, because row-level security cannot restrict
+ * individual columns. The privileged roles are exempt so that the server (which
+ * holds the service_role key) and a plain SQL session can still appoint the
+ * first admin — there is no other way to bootstrap one.
+ */
+-- security INVOKER on purpose: inside a security definer function current_user
+-- is the function's owner, so the caller-role check below would match the
+-- privileged list every time and wave everything through. The function needs no
+-- elevated rights of its own — public.is_admin() does its own lookup.
+create or replace function public.guard_admin_flag()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.is_admin is distinct from old.is_admin
+     and current_user not in ('postgres', 'supabase_admin', 'service_role')
+     and not public.is_admin()
+  then
+    raise exception 'is_admin may only be changed by an administrator'
+      using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists app_users_guard_admin on public.app_users;
+create trigger app_users_guard_admin before update on public.app_users
+  for each row execute function public.guard_admin_flag();
+
+-- --------------------------------------------------------- membership ------
+
+create table if not exists public.organisation_members (
+  organisation_id uuid not null references public.organisations (id) on delete cascade,
+  user_id         uuid not null references auth.users (id) on delete cascade,
+  role            text not null default 'owner' check (role in ('owner', 'editor')),
+  created_at      timestamptz not null default now(),
+  primary key (organisation_id, user_id)
+);
+
+create index if not exists organisation_members_user_idx
+  on public.organisation_members (user_id);
+
+-- Defined after the table it reads: PostgreSQL validates the body of a SQL
+-- function when it is created, so this cannot come any earlier.
 create or replace function public.is_member(org uuid)
 returns boolean
 language sql
@@ -87,19 +141,6 @@ as $$
        and m.user_id = auth.uid()
   );
 $$;
-
--- --------------------------------------------------------- membership ------
-
-create table if not exists public.organisation_members (
-  organisation_id uuid not null references public.organisations (id) on delete cascade,
-  user_id         uuid not null references auth.users (id) on delete cascade,
-  role            text not null default 'owner' check (role in ('owner', 'editor')),
-  created_at      timestamptz not null default now(),
-  primary key (organisation_id, user_id)
-);
-
-create index if not exists organisation_members_user_idx
-  on public.organisation_members (user_id);
 
 -- ------------------------------------------------------------- claims ------
 -- `kind = 'existing'` claims an organisation already in the DB.

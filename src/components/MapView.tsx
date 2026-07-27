@@ -189,11 +189,6 @@ export default function MapView({ markers, loadError }: Props) {
         {/* pushes the search bar to the bottom edge on mobile only */}
         <div className="flex-1 sm:hidden" />
 
-        {/* on mobile the suggestions open upwards, over this line — drop it */}
-        {counts && !suggestionsOpen && (
-          <div className="mb-2 select-none px-0.5 sm:hidden">{counts}</div>
-        )}
-
         {/* search box */}
         <div className="pointer-events-auto relative">
           <div className="flex items-center gap-2 rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-xl transition focus-within:border-accent/60 focus-within:bg-[#141414]/60">
@@ -267,9 +262,15 @@ export default function MapView({ markers, loadError }: Props) {
             </div>
           )}
         </div>
+
+        {/* stats sit under the search bar on mobile; the suggestions open
+            upwards from the bar, so they never cover this line */}
+        {counts && (
+          <div className="mt-2 select-none px-0.5 sm:hidden">{counts}</div>
+        )}
       </div>
 
-      {/* bottom-left stats (≥sm — on mobile they sit above the search bar) */}
+      {/* bottom-left stats (≥sm — on mobile they sit under the search bar) */}
       {counts && (
         <div className="pointer-events-none absolute bottom-6 left-6 z-[500] hidden select-none sm:block">
           {counts}

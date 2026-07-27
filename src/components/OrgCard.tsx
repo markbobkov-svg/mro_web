@@ -5,9 +5,9 @@ import type { OrgAtAirport } from "@/lib/types";
 
 const SCOPE_PREVIEW = 16;
 
-// Ratings printed as small badges next to a certificate — only the short, clean
-// EASA codes (A1, B1, C4, D1…); long descriptive ratings live in the scope list.
-function ratingBadges(ratings: string[]): string[] {
+// Only the short, clean EASA codes (A1, B1, C4, D1…) are shown as a ratings
+// line; long descriptive ratings live in the scope list below.
+function ratingCodes(ratings: string[]): string[] {
   return ratings.filter((r) => r && r.trim().length <= 5);
 }
 
@@ -49,7 +49,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
   const multiGroup = groups.length > 1;
 
   return (
-    <div className="px-2 py-4">
+    <div className="px-2 py-5">
       {/* header */}
       <div className="min-w-0">
         <h3 className="text-sm font-medium leading-snug text-white">
@@ -66,9 +66,9 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         <p className="mt-3 text-xs text-white/30">No approval details.</p>
       )}
 
-      {/* authority switcher — shown only when the org has more than one */}
+      {/* authority switcher — text buttons, shown only when there's more than one */}
       {authorities.length > 1 && (
-        <div className="mt-3 flex flex-wrap gap-1">
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
           {authorities.map((a, i) => {
             const active = i === authIdx;
             return (
@@ -77,10 +77,10 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                 onClick={() => selectAuthority(i)}
                 title={a.name ?? a.code}
                 className={
-                  "rounded-[2px] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide2 transition " +
+                  "text-[10px] uppercase tracking-wide2 transition " +
                   (active
-                    ? "bg-accent/20 text-accent-bright ring-1 ring-accent/40"
-                    : "bg-white/[0.05] text-white/50 hover:bg-white/10 hover:text-white/80")
+                    ? "font-semibold text-accent-bright"
+                    : "font-medium text-white/40 hover:text-white/75")
                 }
               >
                 {a.code}
@@ -90,9 +90,9 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         </div>
       )}
 
-      {/* selected authority: certificates + scope */}
+      {/* selected authority: certificates + scope — flat on the panel, no box */}
       {auth && (
-        <div className="mt-3 rounded-[2px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
+        <div className="mt-4">
           <div className="text-[10px] font-semibold uppercase tracking-wide2 text-accent-bright">
             {auth.isEasa ? "EASA" : auth.code}
             {auth.name && auth.name !== auth.code ? (
@@ -105,10 +105,10 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
           {/* certificate references under this authority */}
           <div className="mt-2 space-y-2">
             {auth.certificates.map((c, i) => {
-              const badges = ratingBadges(c.ratings);
+              const codes = ratingCodes(c.ratings);
               const url = c.url ?? auth.url;
               return (
-                <div key={i} className="border-t border-white/5 pt-2 first:border-0 first:pt-0">
+                <div key={i}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-[9px] font-semibold uppercase tracking-wide2 text-white/45">
                       {c.approvalType}
@@ -134,31 +134,24 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                       </a>
                     )}
                   </div>
-                  {badges.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {badges.map((r) => (
-                        <span
-                          key={r}
-                          className="rounded-[2px] bg-white/[0.07] px-1.5 py-0.5 font-mono text-[10px] text-white/70"
-                        >
-                          {r}
-                        </span>
-                      ))}
-                    </div>
+                  {codes.length > 0 && (
+                    <p className="mt-1 font-mono text-[10px] text-white/45">
+                      {codes.join("  ·  ")}
+                    </p>
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* scope, filterable by class, rendered as a vertical list */}
+          {/* scope, filterable by class, as an airy vertical list */}
           {auth.classes.length > 0 && (
-            <div className="mt-3">
-              <p className="mb-1.5 text-[10px] uppercase tracking-wide2 text-white/35">
+            <div className="mt-4">
+              <p className="text-[10px] uppercase tracking-wide2 text-white/35">
                 Scope
               </p>
-              {/* class filter chips */}
-              <div className="mb-2 flex flex-wrap gap-1">
+              {/* class filter — text buttons */}
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                 <ClassChip
                   label="All"
                   count={totalItemsAll(auth)}
@@ -176,24 +169,24 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                 ))}
               </div>
 
-              {/* vertical scope list; aircraft classes get LINE / BASE columns */}
-              <div className="overflow-hidden rounded-[2px] border border-white/5">
+              {/* vertical list; aircraft classes get LINE / BASE columns */}
+              <div className="mt-2">
                 {blocks.map((b, bi) => (
-                  <div key={b.group.label + bi}>
+                  <div key={b.group.label + bi} className="mt-3 first:mt-0">
                     {(multiGroup || b.group.isAircraft) && (
-                      <div className="flex items-center gap-2 bg-white/[0.03] px-2 py-1">
+                      <div className="flex items-center gap-2 pb-0.5">
                         <span
-                          className="min-w-0 flex-1 truncate text-[10px] font-medium uppercase tracking-wide2 text-white/45"
+                          className="min-w-0 flex-1 truncate text-[10px] font-medium uppercase tracking-wide2 text-white/40"
                           title={b.group.label}
                         >
                           {multiGroup ? b.group.label : ""}
                         </span>
                         {b.group.isAircraft && (
                           <>
-                            <span className="w-9 shrink-0 text-center text-[9px] uppercase tracking-wide2 text-white/35">
+                            <span className="w-9 shrink-0 text-center text-[9px] uppercase tracking-wide2 text-white/30">
                               Line
                             </span>
-                            <span className="w-9 shrink-0 text-center text-[9px] uppercase tracking-wide2 text-white/35">
+                            <span className="w-9 shrink-0 text-center text-[9px] uppercase tracking-wide2 text-white/30">
                               Base
                             </span>
                           </>
@@ -203,7 +196,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                     {b.items.map((it, ii) => (
                       <div
                         key={ii}
-                        className="flex items-center gap-2 border-t border-white/5 px-2 py-1 text-[11px]"
+                        className="flex items-center gap-2 py-1 text-[11px]"
                       >
                         <span
                           className="min-w-0 flex-1 truncate text-white/75"
@@ -224,7 +217,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                 {hidden > 0 && (
                   <button
                     onClick={() => setExpanded(true)}
-                    className="w-full border-t border-white/5 px-2 py-1 text-left text-[11px] text-accent-bright transition hover:bg-white/[0.05]"
+                    className="mt-2 text-[11px] text-accent-bright/90 transition hover:text-accent-bright"
                   >
                     +{hidden} more
                   </button>
@@ -237,7 +230,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
 
       {/* contacts */}
       {org.contacts.length > 0 && (
-        <div className="mt-3 space-y-1.5 border-t border-white/5 pt-3">
+        <div className="mt-4 space-y-1.5">
           {org.contacts.map((c, i) => (
             <div key={i} className="text-xs">
               {(c.label || c.name) && (
@@ -272,7 +265,7 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
 
       {/* org-level contact fallback */}
       {org.contacts.length === 0 && (org.phone || org.email || org.website) && (
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/5 pt-3 text-xs">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
           {org.phone && (
             <a
               href={`tel:${org.phone.replace(/\s+/g, "")}`}
@@ -351,14 +344,14 @@ function ClassChip({
       onClick={onClick}
       title={label}
       className={
-        "max-w-[12rem] truncate rounded-[2px] px-1.5 py-0.5 text-[10px] font-medium transition " +
+        "max-w-[13rem] truncate text-[10px] transition " +
         (active
-          ? "bg-accent/20 text-accent-bright ring-1 ring-accent/40"
-          : "bg-white/[0.05] text-white/55 hover:bg-white/10 hover:text-white/85")
+          ? "font-semibold text-accent-bright"
+          : "font-medium text-white/45 hover:text-white/80")
       }
     >
       {label}
-      <span className={active ? "ml-1 text-accent-bright/70" : "ml-1 text-white/35"}>
+      <span className={active ? "ml-1 text-accent-bright/60" : "ml-1 text-white/30"}>
         {count}
       </span>
     </button>

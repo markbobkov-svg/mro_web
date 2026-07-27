@@ -19,9 +19,15 @@ import {
 // dependency) and stay out of the initial bundle.
 
 // Protomaps "black" basemap — a very dark vector theme; English labels.
-// The PMTiles are served same-origin through our /api/basemap proxy (the
-// Protomaps demo bucket blocks cross-origin browser reads via CORS).
-const PMTILES_PROXY_PATH = "/api/basemap";
+// The browser reads the PMTiles straight from our R2 bucket (CORS on the bucket
+// allows ranged GETs from our origins). Going direct drops a serverless hop per
+// tile request and lets Cloudflare's CDN serve the ranges.
+// NOTE: r2.dev is rate limited by Cloudflare and meant for development; for
+// production traffic, point this at a custom domain on the bucket by setting
+// NEXT_PUBLIC_PMTILES_URL (e.g. https://tiles.one4five.tech/europe-z13.pmtiles).
+const PMTILES_URL =
+  process.env.NEXT_PUBLIC_PMTILES_URL ??
+  "https://pub-8dfd157e131f4ce29bfa353f4c095e5a.r2.dev/europe-z13.pmtiles";
 const GLYPHS =
   "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
 const SPRITE = "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
@@ -165,7 +171,7 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
               sources: {
                 protomaps: {
                   type: "vector",
-                  url: `pmtiles://${window.location.origin}${PMTILES_PROXY_PATH}`,
+                  url: `pmtiles://${PMTILES_URL}`,
                   attribution: ATTRIB,
                 },
               },

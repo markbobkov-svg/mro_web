@@ -401,18 +401,48 @@ export async function getUserClaims(userId: string): Promise<ClaimRow[]> {
   );
 }
 
+/**
+ * Look up the e-mail for a set of accounts.
+ *
+ * Claims and change requests key on `auth.users`, and `app_users` keys on the
+ * same ids without a foreign key between the two — so PostgREST cannot embed
+ * one in the other and this second query is how the reviewer sees who asked.
+ */
+async function emailsByUserId(
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(userIds)].filter(Boolean);
+  if (ids.length === 0) return new Map();
+
+  const supabase = getAdminSupabase();
+  const { data } = await supabase
+    .from("app_users")
+    .select("id, email")
+    .in("id", ids);
+
+  return new Map(
+    ((data as Record<string, unknown>[]) ?? []).map((u) => [
+      String(u.id),
+      String(u.email ?? ""),
+    ]),
+  );
+}
+
 /** The admin queue: claims still awaiting a decision. */
 export async function getPendingClaims(): Promise<ClaimRow[]> {
   const supabase = getAdminSupabase();
   const { data, error } = await supabase
     .from("organisation_claims")
-    .select("*, organisations(name), app_users(email)")
+    .select("*, organisations(name)")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
   if (error) throw new Error(`getPendingClaims: ${error.message}`);
 
-  return ((data as Record<string, unknown>[]) ?? []).map((r) =>
-    readClaim(r, (embedded(r.app_users)?.email as string | null) ?? null),
+  const rows = (data as Record<string, unknown>[]) ?? [];
+  const emails = await emailsByUserId(rows.map((r) => String(r.user_id)));
+
+  return rows.map((r) =>
+    readClaim(r, emails.get(String(r.user_id)) ?? null),
   );
 }
 
@@ -444,14 +474,17 @@ export async function getPendingChangeRequests(): Promise<ChangeRequest[]> {
   const supabase = getAdminSupabase();
   const { data, error } = await supabase
     .from("organisation_change_requests")
-    .select("*, organisations(name), app_users(email)")
+    .select("*, organisations(name)")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
   if (error) throw new Error(`getPendingChangeRequests: ${error.message}`);
 
-  return ((data as Record<string, unknown>[]) ?? []).map((r) => ({
+  const rows = (data as Record<string, unknown>[]) ?? [];
+  const emails = await emailsByUserId(rows.map((r) => String(r.user_id)));
+
+  return rows.map((r) => ({
     ...readChangeRequest(r),
     organisationName: (embedded(r.organisations)?.name as string | null) ?? undefined,
-    userEmail: (embedded(r.app_users)?.email as string | null) ?? undefined,
+    userEmail: emails.get(String(r.user_id)) ?? undefined,
   }));
 }

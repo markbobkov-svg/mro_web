@@ -30,22 +30,26 @@ const SPRITE = "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
 const ATTRIB =
   '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
 
-// Declutter the basemap for an aviation map: drop road lines/labels (keeping
-// only airport runways & taxiways), city/town/suburb labels, and buildings.
-// Country / region / water labels, borders and land/water stay for orientation.
-const HIDE_LAYERS = new Set([
-  "places_locality",
-  "places_subplace",
-  "buildings",
-  "address_label",
-]);
-const KEEP_ROADS = new Set(["roads_runway", "roads_taxiway"]);
+// Keep the Protomaps "black" theme's full detail (roads, buildings, labels) as
+// it ships, and only strip the two point-markers the user doesn't want:
+//   1. roads_shields  – the highway "index" badges (A1, E20…). Road lines and
+//      road-name labels (roads_labels_*) are separate layers and stay.
+//   2. the dot next to each city – places_locality is one symbol layer that
+//      draws BOTH a "townspot"/"capital" circle (icon-image) AND the city name
+//      (text-field). We drop just the icon so the name label survives.
 function tidyLayers(layers: any[]): any[] {
-  return layers.filter(
-    (l) =>
-      !HIDE_LAYERS.has(l.id) &&
-      !(l.id.startsWith("roads_") && !KEEP_ROADS.has(l.id)),
-  );
+  return layers
+    .filter((l) => l.id !== "roads_shields")
+    .map((l) => {
+      if (l.id === "places_locality" && l.layout) {
+        const layout = { ...l.layout };
+        delete layout["icon-image"];
+        delete layout["icon-size"];
+        delete layout["icon-padding"];
+        return { ...l, layout };
+      }
+      return l;
+    });
 }
 
 interface Libs {

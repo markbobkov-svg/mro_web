@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AirportMarker, AirportDetail } from "@/lib/types";
+import type { AirportMarker, AirportDetail, SearchHit } from "@/lib/types";
 import { BasemapHandle, hasWebGL } from "@/lib/basemap";
 import AirportPanel from "./AirportPanel";
 import RasterBasemap from "./RasterBasemap";
@@ -26,6 +26,7 @@ export default function MapView({ markers, loadError }: Props) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [serverResults, setServerResults] = useState<SearchHit[] | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
 
   // pick the engine on the client (vector needs WebGL; raster works everywhere)
@@ -59,7 +60,9 @@ export default function MapView({ markers, loadError }: Props) {
     [markers],
   );
 
-  const searchResults = useMemo(() => {
+  // Instant, local matches on the airport's own fields — shown while the
+  // server answers so typing never feels laggy.
+  const localResults = useMemo<SearchHit[]>(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [];
     return markers
@@ -71,8 +74,54 @@ export default function MapView({ markers, loadError }: Props) {
           m.city?.toLowerCase().includes(q),
       )
       .sort((a, b) => b.orgCount - a.orgCount)
-      .slice(0, 8);
+      .slice(0, 8)
+      .map((m) => ({
+        id: m.id,
+        iata: m.iata,
+        icao: m.icao,
+        name: m.name,
+        city: m.city,
+        countryCode: m.countryCode,
+        orgCount: m.orgCount,
+        matchedOrgs: [],
+        matchedScope: [],
+      }));
   }, [search, markers]);
+
+  // Full-text search across organisation names and certified scope, which is
+  // far too much data to ship to the browser — so it runs on the server.
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setServerResults(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
+          signal: ctrl.signal,
+        });
+        if (!res.ok) throw new Error(`search failed (${res.status})`);
+        const data: { results?: SearchHit[] } = await res.json();
+        setServerResults(data.results ?? []);
+      } catch {
+        // keep showing the local matches if the request fails or is aborted
+      }
+    }, 180);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [search]);
+
+  // Only airports we can actually place on the map are selectable.
+  const searchResults = useMemo<SearchHit[]>(() => {
+    const list = serverResults ?? localResults;
+    if (!serverResults) return list;
+    const placeable = new Set(markers.map((m) => m.id));
+    return list.filter((r) => placeable.has(r.id));
+  }, [serverResults, localResults, markers]);
 
   const loadDetail = useCallback(async (id: string) => {
     const cached = detailCache.current.get(id);
@@ -248,6 +297,17 @@ export default function MapView({ markers, loadError }: Props) {
                       {m.city ? m.city + " · " : ""}
                       {m.countryCode ?? ""}
                     </span>
+                    {/* why this airport matched, when it wasn't the name */}
+                    {m.matchedOrgs.length > 0 && (
+                      <span className="mt-0.5 block truncate text-[11px] text-accent-bright/70">
+                        {m.matchedOrgs.join(" · ")}
+                      </span>
+                    )}
+                    {m.matchedScope.length > 0 && (
+                      <span className="mt-0.5 block truncate text-[11px] text-white/45">
+                        {m.matchedScope.join(" · ")}
+                      </span>
+                    )}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span className="font-mono text-xs text-accent-bright">

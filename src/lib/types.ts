@@ -77,6 +77,21 @@ export interface OrgAtAirport {
   contacts: Contact[];
 }
 
+/** One row of the search dropdown, with the reason it matched. */
+export interface SearchHit {
+  id: string;
+  iata: string | null;
+  icao: string | null;
+  name: string;
+  city: string | null;
+  countryCode: string | null;
+  orgCount: number;
+  /** Organisations at this airport whose name matched the query. */
+  matchedOrgs: string[];
+  /** Scope lines (aircraft, engines, …) that matched the query. */
+  matchedScope: string[];
+}
+
 export interface AirportDetail {
   airport: {
     id: string;

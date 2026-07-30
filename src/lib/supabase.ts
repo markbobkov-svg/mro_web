@@ -25,6 +25,16 @@ export function getSupabase(): SupabaseClient {
 
   cached = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      // Opt every query out of Next.js' Data Cache. Without this, Vercel caches
+      // the underlying GET forever (its default for an un-tagged fetch), so a
+      // dashboard edit or an admin-approved change would not show on the map
+      // until the cache happened to evict — `revalidatePath` does not reach it,
+      // because these fetches are tagged by the route they run in, not by "/".
+      // The data is now organisation-editable and must read live; the map pages
+      // are `force-dynamic` anyway, so nothing downstream expected a stale read.
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+    },
   });
   return cached;
 }

@@ -193,17 +193,28 @@ export default function MapView({ markers, organisationCount, loadError }: Props
 
   const suggestionsOpen = searchFocused && searchResults.length > 0;
 
-  // rendered in two spots: above the search bar on mobile, bottom-left on ≥sm
-  const counts =
-    !loadError && markers.length > 0 ? (
-      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
-        <span className="text-white/80">{markers.length}</span> airports
-        <span className="mx-2 text-white/20">/</span>
-        <span className="text-white/80">{organisationCount}</span> organisations
-        <span className="mx-2 text-white/20">/</span>
-        <span className="text-white/80">{totalStations}</span> stations
-      </p>
-    ) : null;
+  // Rendered in two spots: above the search bar on mobile, bottom-left on ≥sm.
+  // The mobile line sits directly under the search bar where width is tight,
+  // so it uses APT/ORG/STA; the ≥sm line has the room to spell them out.
+  const hasCounts = !loadError && markers.length > 0;
+  const countsFull = hasCounts ? (
+    <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+      <span className="text-white/80">{markers.length}</span> airports
+      <span className="mx-2 text-white/20">/</span>
+      <span className="text-white/80">{organisationCount}</span> organisations
+      <span className="mx-2 text-white/20">/</span>
+      <span className="text-white/80">{totalStations}</span> stations
+    </p>
+  ) : null;
+  const countsCompact = hasCounts ? (
+    <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+      <span className="text-white/80">{markers.length}</span> APT
+      <span className="mx-2 text-white/20">/</span>
+      <span className="text-white/80">{organisationCount}</span> ORG
+      <span className="mx-2 text-white/20">/</span>
+      <span className="text-white/80">{totalStations}</span> STA
+    </p>
+  ) : null;
 
   return (
     <div className="h-viewport relative w-screen overflow-hidden bg-black">
@@ -358,15 +369,15 @@ export default function MapView({ markers, organisationCount, loadError }: Props
 
         {/* stats sit under the search bar on mobile; the suggestions open
             upwards from the bar, so they never cover this line */}
-        {counts && (
-          <div className="mt-2 select-none px-0.5 sm:hidden">{counts}</div>
+        {countsCompact && (
+          <div className="mt-2 select-none px-0.5 sm:hidden">{countsCompact}</div>
         )}
       </div>
 
       {/* bottom-left stats (≥sm — on mobile they sit under the search bar) */}
-      {counts && (
+      {countsFull && (
         <div className="pointer-events-none absolute bottom-6 left-6 z-[500] hidden select-none sm:block">
-          {counts}
+          {countsFull}
         </div>
       )}
 

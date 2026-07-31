@@ -13,12 +13,21 @@ export default async function Home() {
   }
 
   let markers: AirportMarker[] = [];
+  let organisationCount = 0;
   let error: string | null = null;
   try {
-    markers = await getAirportMarkers();
+    const data = await getAirportMarkers();
+    markers = data.markers;
+    organisationCount = data.organisationCount;
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load airports";
   }
 
-  return <MapView markers={markers} loadError={error} />;
+  return (
+    <MapView
+      markers={markers}
+      organisationCount={organisationCount}
+      loadError={error}
+    />
+  );
 }

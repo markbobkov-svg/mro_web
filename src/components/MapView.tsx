@@ -9,12 +9,14 @@ import VectorBasemap from "./VectorBasemap";
 
 interface Props {
   markers: AirportMarker[];
+  /** Distinct organisations across all airports (one org, many stations). */
+  organisationCount: number;
   loadError: string | null;
 }
 
 type Engine = "vector" | "raster";
 
-export default function MapView({ markers, loadError }: Props) {
+export default function MapView({ markers, organisationCount, loadError }: Props) {
   const basemapRef = useRef<BasemapHandle>(null);
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
   const activeIdRef = useRef<string | null>(null);
@@ -59,7 +61,9 @@ export default function MapView({ markers, loadError }: Props) {
     };
   }, []);
 
-  const totalOrgs = useMemo(
+  // Each pin's orgCount is the orgs at that airport; summed, that's the number
+  // of stations (an org staffing several airports is counted at each one).
+  const totalStations = useMemo(
     () => markers.reduce((sum, m) => sum + m.orgCount, 0),
     [markers],
   );
@@ -195,7 +199,9 @@ export default function MapView({ markers, loadError }: Props) {
       <p className="text-[11px] uppercase tracking-wide2 text-white/45">
         <span className="text-white/80">{markers.length}</span> airports
         <span className="mx-2 text-white/20">/</span>
-        <span className="text-white/80">{totalOrgs}</span> stations
+        <span className="text-white/80">{organisationCount}</span> organisations
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{totalStations}</span> stations
       </p>
     ) : null;
 

@@ -20,9 +20,14 @@ function uniq<T>(arr: T[]): T[] {
 
 /**
  * Every airport that has at least one MRO station, with resolved coordinates
- * and a count of distinct organisations. Drives the map markers.
+ * and a count of distinct organisations — the map pins — plus the distinct
+ * organisation total across all of them (an organisation at several airports is
+ * one organisation but many stations) for the corner counter.
  */
-export async function getAirportMarkers(): Promise<AirportMarker[]> {
+export async function getAirportMarkers(): Promise<{
+  markers: AirportMarker[];
+  organisationCount: number;
+}> {
   const supabase = getSupabase();
 
   // 1. all station → airport links (paginated)
@@ -47,10 +52,14 @@ export async function getAirportMarkers(): Promise<AirportMarker[]> {
   }
 
   const airportIds = Array.from(airportOrgs.keys());
-  if (airportIds.length === 0) return [];
+  if (airportIds.length === 0) return { markers: [], organisationCount: 0 };
 
   // 2. airport details for those ids (chunked .in)
   const markers: AirportMarker[] = [];
+  // Distinct organisations across the airports we can actually place. Summing
+  // each pin's orgCount would instead count stations, since one organisation
+  // can staff many airports.
+  const placedOrgs = new Set<string>();
   const CHUNK = 200;
   for (let i = 0; i < airportIds.length; i += CHUNK) {
     const ids = airportIds.slice(i, i + CHUNK);
@@ -67,6 +76,8 @@ export async function getAirportMarkers(): Promise<AirportMarker[]> {
         a.iata_code,
       );
       if (!coordinates) continue; // can't place it — skip
+      const orgs = airportOrgs.get(a.id);
+      if (orgs) for (const id of orgs) placedOrgs.add(id);
       markers.push({
         id: a.id,
         iata: a.iata_code ?? null,
@@ -75,11 +86,11 @@ export async function getAirportMarkers(): Promise<AirportMarker[]> {
         city: a.city ?? null,
         countryCode: a.country_code ?? null,
         coordinates,
-        orgCount: airportOrgs.get(a.id)?.size ?? 0,
+        orgCount: orgs?.size ?? 0,
       });
     }
   }
-  return markers;
+  return { markers, organisationCount: placedOrgs.size };
 }
 
 const APPROVAL_ORDER = ["Part-145", "Part-CAMO", "Part-M", "Part-CAO"];

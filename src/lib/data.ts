@@ -141,18 +141,25 @@ function deriveLocationScope(values: (string | null)[]): string | null {
   return [...set][0];
 }
 
-/** All org-level scope rows for a set of orgs (paginated — big MROs have many). */
-async function fetchOrgScope(supabase: any, orgIds: string[]): Promise<any[]> {
+/**
+ * Per-station scope rows for the stations at one airport (paginated — a big MRO
+ * can list many types). This is what the card shows: the scope actually worked
+ * at that station, with the station's own line/base — not the organisation's
+ * full certified scope. organisation_station_scope has no authority_id, so each
+ * row is tied to an authority by matching its source_url to an approval's.
+ */
+async function fetchStationScope(supabase: any, stationIds: string[]): Promise<any[]> {
+  if (stationIds.length === 0) return [];
   const rows: any[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
-      .from("organisation_scope")
+      .from("organisation_station_scope")
       .select(
-        "organisation_id, authority_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope",
+        "organisation_id, station_id, authority_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope, source_url",
       )
-      .in("organisation_id", orgIds)
+      .in("station_id", stationIds)
       .range(from, from + PAGE - 1);
-    if (error) throw new Error(`getAirportDetail(org_scope): ${error.message}`);
+    if (error) throw new Error(`getAirportDetail(station_scope): ${error.message}`);
     if (!data || data.length === 0) break;
     rows.push(...data);
     if (data.length < PAGE) break;
@@ -207,7 +214,6 @@ export async function getAirportDetail(
     orgsRes,
     apprRes,
     scopeRows,
-    stationScopeRes,
     contactsRes,
     authRes,
     profilesRes,
@@ -224,11 +230,9 @@ export async function getAirportDetail(
           "id, organisation_id, approval_type, approval_reference, ratings, valid_until, source_url, authority_id, authorities(code, name)",
         )
         .in("organisation_id", orgIds),
-      fetchOrgScope(supabase, orgIds),
-      supabase
-        .from("organisation_station_scope")
-        .select("station_id, location_scope")
-        .in("station_id", stationIds),
+      // Scope shown on the card is per-station (organisation_station_scope for the
+      // stations at THIS airport), not the organisation's whole certified scope.
+      fetchStationScope(supabase, stationIds),
       supabase
         .from("organisation_contacts")
         .select(
@@ -259,7 +263,6 @@ export async function getAirportDetail(
   for (const [label, res] of [
     ["organisations", orgsRes],
     ["approvals", apprRes],
-    ["station_scope", stationScopeRes],
     ["contacts", contactsRes],
     ["authorities", authRes],
   ] as const) {
@@ -312,12 +315,27 @@ export async function getAirportDetail(
 
   const AUTH_NONE = "∅";
 
-  // --- org-level scope: group org -> authority -> class -> items ---
+  // organisation_station_scope has an authority_id column, but the scraper does
+  // not populate it yet (all null at time of writing). So tie each scope row to
+  // an authority by its own authority_id when present, otherwise by matching its
+  // source_url to one of the organisation's approvals (those carry authority_id).
+  // Keyed per org so two organisations can't borrow each other's mapping. Rows
+  // that resolve to neither fall into AUTH_NONE and show under "Other" — never
+  // merged into another authority. Once the scraper fills authority_id this
+  // takes over automatically, no code change needed.
+  const authBySourceUrl = new Map<string, string>(); // `${org}|${source_url}` -> authority_id
+  for (const ap of (apprRes.data as any[]) ?? []) {
+    if (ap.source_url && ap.authority_id) {
+      const k = `${ap.organisation_id}|${ap.source_url}`;
+      if (!authBySourceUrl.has(k)) authBySourceUrl.set(k, ap.authority_id);
+    }
+  }
+
+  // --- per-station scope: group org -> authority -> class -> items ---
   // Classes are keyed case-insensitively so scraped variants like
   // "Components…" and "COMPONENTS…" collapse into one group (first label wins).
-  // Note: scope rows also carry a source_url, but it is deliberately NOT used
-  // for the certificate link — those come only from organisation_approvals (see
-  // below). A scope row's source_url is often just the organisation's own site.
+  // line/base come from the station's own location_scope, so they are accurate
+  // for THIS airport rather than the organisation as a whole.
   type ScopeAcc = { text: string; line: boolean; base: boolean };
   type ClassGroup = { label: string; items: Map<string, ScopeAcc> };
   const scopeByOrgAuth = new Map<
@@ -326,7 +344,10 @@ export async function getAirportDetail(
   >();
   for (const sc of scopeRows) {
     const org = sc.organisation_id;
-    const auth = sc.authority_id ?? AUTH_NONE;
+    const auth =
+      sc.authority_id ||
+      (sc.source_url && authBySourceUrl.get(`${org}|${sc.source_url}`)) ||
+      AUTH_NONE;
     const cls = (sc.rating_class_text_en || sc.rating_class_text || "Other").trim() || "Other";
     const text = (sc.scope_text_en || sc.scope_text || "").trim();
     if (!text) continue;
@@ -400,8 +421,10 @@ export async function getAirportDetail(
     contactsByOrg.set(c.organisation_id, list);
   }
 
+  // Per-station line/base summary (the org header badge), from the same
+  // station-scope rows now that they are fetched with location_scope.
   const stationLocScope = new Map<string, (string | null)[]>();
-  for (const sc of (stationScopeRes.data as any[]) ?? []) {
+  for (const sc of scopeRows) {
     const list = stationLocScope.get(sc.station_id) ?? [];
     list.push(sc.location_scope ?? null);
     stationLocScope.set(sc.station_id, list);

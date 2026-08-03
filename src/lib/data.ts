@@ -148,7 +148,7 @@ async function fetchOrgScope(supabase: any, orgIds: string[]): Promise<any[]> {
     const { data, error } = await supabase
       .from("organisation_scope")
       .select(
-        "organisation_id, authority_id, organisation_approval_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope, source_url",
+        "organisation_id, authority_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope",
       )
       .in("organisation_id", orgIds)
       .range(from, from + PAGE - 1);
@@ -221,7 +221,7 @@ export async function getAirportDetail(
       supabase
         .from("organisation_approvals")
         .select(
-          "id, organisation_id, approval_type, approval_reference, ratings, valid_until, authority_id, authorities(code, name)",
+          "id, organisation_id, approval_type, approval_reference, ratings, valid_until, source_url, authority_id, authorities(code, name)",
         )
         .in("organisation_id", orgIds),
       fetchOrgScope(supabase, orgIds),
@@ -312,48 +312,41 @@ export async function getAirportDetail(
 
   const AUTH_NONE = "∅";
 
-  // --- org-level scope: group org -> authority -> class -> items; collect cert links ---
+  // --- org-level scope: group org -> authority -> class -> items ---
   // Classes are keyed case-insensitively so scraped variants like
   // "Components…" and "COMPONENTS…" collapse into one group (first label wins).
+  // Note: scope rows also carry a source_url, but it is deliberately NOT used
+  // for the certificate link — those come only from organisation_approvals (see
+  // below). A scope row's source_url is often just the organisation's own site.
   type ScopeAcc = { text: string; line: boolean; base: boolean };
   type ClassGroup = { label: string; items: Map<string, ScopeAcc> };
   const scopeByOrgAuth = new Map<
     string,
     Map<string, Map<string, ClassGroup>>
   >();
-  const urlByApproval = new Map<string, string>(); // organisation_approval_id -> source_url
-  const urlByOrgAuth = new Map<string, string>(); // `${org}|${auth}` -> source_url
   for (const sc of scopeRows) {
     const org = sc.organisation_id;
     const auth = sc.authority_id ?? AUTH_NONE;
     const cls = (sc.rating_class_text_en || sc.rating_class_text || "Other").trim() || "Other";
     const text = (sc.scope_text_en || sc.scope_text || "").trim();
-    if (text) {
-      const clsKey = cls.toLowerCase();
-      const ls = (sc.location_scope || "").toLowerCase();
-      const line = ls === "line" || ls === "both";
-      const base = ls === "base" || ls === "both";
-      const cleaned = cleanScopeText(text, cls);
-      let am = scopeByOrgAuth.get(org);
-      if (!am) { am = new Map(); scopeByOrgAuth.set(org, am); }
-      let cm = am.get(auth);
-      if (!cm) { cm = new Map(); am.set(auth, cm); }
-      let grp = cm.get(clsKey);
-      if (!grp) { grp = { label: cls, items: new Map() }; cm.set(clsKey, grp); }
-      const itKey = cleaned.toLowerCase();
-      let it = grp.items.get(itKey);
-      if (!it) { it = { text: cleaned, line: false, base: false }; grp.items.set(itKey, it); }
-      // one aircraft can appear as separate line/base rows — OR the flags together
-      it.line = it.line || line;
-      it.base = it.base || base;
-    }
-    if (sc.source_url) {
-      if (sc.organisation_approval_id && !urlByApproval.has(sc.organisation_approval_id)) {
-        urlByApproval.set(sc.organisation_approval_id, sc.source_url);
-      }
-      const k = `${org}|${auth}`;
-      if (!urlByOrgAuth.has(k)) urlByOrgAuth.set(k, sc.source_url);
-    }
+    if (!text) continue;
+    const clsKey = cls.toLowerCase();
+    const ls = (sc.location_scope || "").toLowerCase();
+    const line = ls === "line" || ls === "both";
+    const base = ls === "base" || ls === "both";
+    const cleaned = cleanScopeText(text, cls);
+    let am = scopeByOrgAuth.get(org);
+    if (!am) { am = new Map(); scopeByOrgAuth.set(org, am); }
+    let cm = am.get(auth);
+    if (!cm) { cm = new Map(); am.set(auth, cm); }
+    let grp = cm.get(clsKey);
+    if (!grp) { grp = { label: cls, items: new Map() }; cm.set(clsKey, grp); }
+    const itKey = cleaned.toLowerCase();
+    let it = grp.items.get(itKey);
+    if (!it) { it = { text: cleaned, line: false, base: false }; grp.items.set(itKey, it); }
+    // one aircraft can appear as separate line/base rows — OR the flags together
+    it.line = it.line || line;
+    it.base = it.base || base;
   }
 
   // --- approvals: group org -> authority -> certificates[] ---
@@ -373,7 +366,10 @@ export async function getAirportDetail(
       reference: ap.approval_reference ?? null,
       ratings: Array.isArray(ap.ratings) ? ap.ratings : [],
       validUntil: ap.valid_until ?? null,
-      url: (ap.id && urlByApproval.get(ap.id)) || null,
+      // The certificate link comes straight from this approval row's source_url
+      // and nowhere else. No fallback: if the register did not record a document
+      // URL, the card shows no certificate link (see OrgCard).
+      url: ap.source_url ?? null,
     };
     let am = certsByOrgAuth.get(org);
     if (!am) { am = new Map(); certsByOrgAuth.set(org, am); }
@@ -445,7 +441,6 @@ export async function getAirportDetail(
         isEasa: code.toUpperCase() === "EASA",
         certificates,
         classes,
-        url: urlByOrgAuth.get(`${orgId}|${authId}`) ?? certificates.find((c) => c.url)?.url ?? null,
       });
     }
     // EASA first, then alphabetically by code

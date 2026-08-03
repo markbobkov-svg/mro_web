@@ -184,7 +184,9 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
           <div className="mt-2 space-y-2">
             {auth.certificates.map((c, i) => {
               const codes = ratingCodes(c.ratings);
-              const url = c.url ?? auth.url;
+              // Only this certificate's own source_url — no fallback. If it is
+              // null the icon is simply not shown.
+              const url = c.url;
               return (
                 <div key={i}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

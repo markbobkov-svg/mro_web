@@ -48,7 +48,6 @@ export interface AuthorityGroup {
   isEasa: boolean;
   certificates: Certificate[];
   classes: ScopeClass[]; // scope grouped by class; clickable in the UI
-  url: string | null; // representative certificate link for this authority
 }
 
 export interface Contact {

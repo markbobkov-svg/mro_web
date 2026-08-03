@@ -135,8 +135,11 @@ Tables: `airports`, `authorities`, `organisations`, `organisation_stations`,
   canonical EASA order where recognisable.
 - `organisation_scope.location_scope` (`line` / `base` / `both`) drives the
   LINE/BASE ✕ columns shown for aircraft classes.
-- `source_url` on scope rows is the certificate link shown next to each
-  approval reference.
+- The certificate link next to each approval reference comes **only** from
+  `organisation_approvals.source_url` — the authority's own register entry or
+  certificate document. There is no fallback: a scope row's `source_url` is
+  often just the organisation's website, so it is never used for the cert link,
+  and an approval with no `source_url` shows no certificate icon at all.
 
 ## Gotchas
 

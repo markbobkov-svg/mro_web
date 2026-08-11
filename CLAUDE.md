@@ -27,6 +27,16 @@ contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
 - Map `maxZoom` is capped at **13** to match the extract (no overzoom, always
   crisp) and `maxBounds` is set to `COVERAGE_BBOX`, so the un-extracted rest of
   the world can't be panned/zoomed into.
+- **Attribution.** The basemap is OpenStreetMap data (ODbL) rendered via
+  Protomaps, so OSM attribution is **required** and shown: a compact "ⓘ" bottom
+  -right on the vector map (expands to *Protomaps © OpenStreetMap*) and a small
+  credit on the raster fallback. It can be styled and made unobtrusive, but not
+  removed — the map is our *product*, the underlying data is not our *property*.
+- **Fonts, sprites and the raster fallback are all env-overridable**
+  (`NEXT_PUBLIC_GLYPHS_URL`, `NEXT_PUBLIC_SPRITE_URL`,
+  `NEXT_PUBLIC_RASTER_TILES_URL`, `NEXT_PUBLIC_RASTER_ATTRIB`). Defaults keep the
+  current Protomaps-GitHub / CARTO sources so nothing breaks; see the pre-launch
+  TODO for why to move them before going commercial.
 
 ## Pre-launch TODO
 
@@ -43,6 +53,18 @@ contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
    **DNS only** (grey cloud) so traffic isn't double-proxied; the tiles
    subdomain, by contrast, *should* stay proxied (orange cloud) for the CDN.
 3. Refresh the PMTiles extract when the OSM snapshot gets stale.
+6. **Mirror fonts + sprites to R2, and settle the raster fallback — before
+   going commercial.** Fonts/sprites currently load from `protomaps.github.io`
+   (Protomaps' GitHub Pages): free, but a third-party host with no SLA and
+   possible rate limits. Copy `basemaps-assets/fonts/**` and
+   `basemaps-assets/sprites/v4/light.*` into the R2 bucket and set
+   `NEXT_PUBLIC_GLYPHS_URL` / `NEXT_PUBLIC_SPRITE_URL`. The raster fallback uses
+   CARTO's public CDN, whose free basemaps have usage limits a commercial
+   product can exceed — either self-host raster tiles, drop the fallback
+   (vector-only; it only serves ancient no-WebGL browsers), or take a CARTO
+   plan, via `NEXT_PUBLIC_RASTER_TILES_URL`. None of this is a licence fee — the
+   OSM/Protomaps/MapLibre stack is free for commercial use — it is about not
+   depending on someone else's host in production.
 4. **Custom SMTP — this gates opening the dashboard to organisations.**
    Supabase's built-in mailer is rate-limited to a handful of messages an hour
    and on new projects only delivers to the project team's own addresses. So a

@@ -19,10 +19,16 @@ import {
   MIN_ZOOM,
 } from "@/lib/basemap";
 
-// CARTO "dark matter" RASTER tiles — plain <img> tiles (no WebGL). Fallback for
-// browsers without WebGL.
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+// RASTER tiles — plain <img> tiles (no WebGL). Fallback for browsers without
+// WebGL (rare). Defaults to CARTO's public "dark matter" CDN, but overridable:
+// CARTO's free basemaps carry usage limits that a commercial product may exceed,
+// so this can be repointed at our own raster tiles or a licensed provider
+// without a code change. Keep the attribution in step with whatever URL is set.
+const TILE_URL =
+  process.env.NEXT_PUBLIC_RASTER_TILES_URL ??
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 const TILE_ATTRIB =
+  process.env.NEXT_PUBLIC_RASTER_ATTRIB ??
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 // solid dark 1×1 pixel — failed tiles blend into the map instead of flashing white
 const ERROR_TILE =
@@ -84,6 +90,12 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
           errorTileUrl: ERROR_TILE,
         }).addTo(map);
         L.control.zoom({ position: "bottomright" }).addTo(map);
+        // Required OpenStreetMap attribution (prefix:false drops Leaflet's own
+        // "Leaflet" credit so only the data attribution shows).
+        L.control
+          .attribution({ position: "bottomright", prefix: false })
+          .addAttribution(TILE_ATTRIB)
+          .addTo(map);
         mapRef.current = map;
 
         const applyScale = () =>

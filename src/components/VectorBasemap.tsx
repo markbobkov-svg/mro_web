@@ -28,11 +28,19 @@ import {
 const PMTILES_URL =
   process.env.NEXT_PUBLIC_PMTILES_URL ??
   "https://pub-8dfd157e131f4ce29bfa353f4c095e5a.r2.dev/europe-z13.pmtiles";
+// Fonts + sprites default to Protomaps' own GitHub-hosted assets, but both are
+// overridable so they can be mirrored to our R2 alongside the tiles — relying on
+// someone else's GitHub Pages for a commercial product is a reliability risk
+// (rate limits, path changes), not a licensing one. Mirror once, then set these.
 const GLYPHS =
+  process.env.NEXT_PUBLIC_GLYPHS_URL ??
   "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
-const SPRITE = "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
+const SPRITE =
+  process.env.NEXT_PUBLIC_SPRITE_URL ??
+  "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
+// OpenStreetMap's ODbL requires attribution — shown via a compact control below.
 const ATTRIB =
-  '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
+  '<a href="https://protomaps.com" target="_blank" rel="noreferrer">Protomaps</a> © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
 
 // Keep the Protomaps "black" theme's full detail (roads, buildings, labels) as
 // it ships, and only strip the two point-markers the user doesn't want:
@@ -202,6 +210,17 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
         mapRef.current = map;
         map.addControl(
           new maplibregl.NavigationControl({ showCompass: false }),
+          "bottom-right",
+        );
+        // Required OpenStreetMap attribution. Compact = a small "ⓘ" that expands
+        // on click, so the map still reads as ours while staying ODbL-compliant.
+        // customAttribution guarantees it regardless of source-load timing; it
+        // matches the source string above, so MapLibre shows it once, not twice.
+        map.addControl(
+          new maplibregl.AttributionControl({
+            compact: true,
+            customAttribution: ATTRIB,
+          }),
           "bottom-right",
         );
 

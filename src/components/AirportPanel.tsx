@@ -39,6 +39,7 @@ export default function AirportPanel({
         <button
           onClick={onClose}
           aria-label="Close"
+          title="Close (Esc)"
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[2px] text-white/50 transition hover:bg-white/10 hover:text-white"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">

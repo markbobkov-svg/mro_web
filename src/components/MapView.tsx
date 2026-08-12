@@ -20,6 +20,8 @@ export default function MapView({ markers, organisationCount, loadError }: Props
   const basemapRef = useRef<BasemapHandle>(null);
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
   const activeIdRef = useRef<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const [engine, setEngine] = useState<Engine | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -34,6 +36,8 @@ export default function MapView({ markers, organisationCount, loadError }: Props
     label: string;
   } | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
+  // Which suggestion the keyboard has highlighted (-1 = none).
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   // pick the engine on the client (vector needs WebGL; raster works everywhere)
   useEffect(() => {
@@ -125,6 +129,17 @@ export default function MapView({ markers, organisationCount, loadError }: Props
     };
   }, [search]);
 
+  // Reset the keyboard highlight as the query (and result list) changes.
+  useEffect(() => setActiveIndex(-1), [search]);
+
+  // Keep the highlighted suggestion in view when navigating with the keyboard.
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    listRef.current
+      ?.querySelector(`[data-idx="${activeIndex}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
+
   // Only airports we can actually place on the map are selectable.
   const searchResults = useMemo<SearchHit[]>(() => {
     const list = serverResults ?? localResults;
@@ -185,6 +200,32 @@ export default function MapView({ markers, organisationCount, loadError }: Props
     setOrgFilter(null);
   }, []);
 
+  // Keyboard conveniences that work anywhere on the map: "/" jumps to the search
+  // box, and Escape closes the open airport panel. (The search box handles its
+  // own Escape, so we ignore it while the box is focused.)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const typing =
+        el?.tagName === "INPUT" ||
+        el?.tagName === "TEXTAREA" ||
+        el?.isContentEditable === true;
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      } else if (
+        e.key === "Escape" &&
+        activeIdRef.current &&
+        el !== inputRef.current
+      ) {
+        closePanel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closePanel]);
+
   const onVectorFail = useCallback(() => setEngine("raster"), []);
 
   const activeMarker = activeId
@@ -192,6 +233,49 @@ export default function MapView({ markers, organisationCount, loadError }: Props
     : null;
 
   const suggestionsOpen = searchFocused && searchResults.length > 0;
+  const queryLen = search.trim().length;
+  // On an empty, focused box, teach the search's reach (organisations and
+  // aircraft types, not just airports); on a settled query with nothing found,
+  // confirm the search actually ran rather than leaving a silent blank.
+  const showHint = searchFocused && queryLen === 0;
+  const noMatches =
+    searchFocused &&
+    queryLen >= 2 &&
+    serverResults !== null &&
+    searchResults.length === 0;
+
+  const commitHit = useCallback(
+    (hit: SearchHit) => {
+      const label = search.trim();
+      setSearch("");
+      setSearchFocused(false);
+      inputRef.current?.blur();
+      selectAirport(hit.id, { orgIds: hit.matchedOrgIds, label });
+    },
+    [search, selectAirport],
+  );
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const n = searchResults.length;
+    if (e.key === "ArrowDown" && n > 0) {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % n);
+    } else if (e.key === "ArrowUp" && n > 0) {
+      e.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? n - 1 : i - 1));
+    } else if (e.key === "Enter" && n > 0) {
+      e.preventDefault();
+      const hit = searchResults[activeIndex >= 0 ? activeIndex : 0];
+      if (hit) commitHit(hit);
+    } else if (e.key === "Escape") {
+      // first clear the text, then (already empty) release focus
+      if (search) setSearch("");
+      else {
+        setSearchFocused(false);
+        inputRef.current?.blur();
+      }
+    }
+  };
 
   // Rendered in two spots: above the search bar on mobile, bottom-left on ≥sm.
   // The mobile line sits directly under the search bar where width is tight,
@@ -291,78 +375,155 @@ export default function MapView({ markers, organisationCount, loadError }: Props
               />
             </svg>
             <input
+              ref={inputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-              placeholder="Search airport, city or code…"
+              onKeyDown={onSearchKeyDown}
+              placeholder="Search airport, organisation or aircraft…"
+              role="combobox"
+              aria-expanded={suggestionsOpen}
+              aria-controls="search-listbox"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                activeIndex >= 0 ? `search-opt-${activeIndex}` : undefined
+              }
+              aria-label="Search airports, cities, organisations or aircraft types"
               // 16px on mobile keeps iOS from zooming the page in on focus
               className="w-full bg-transparent text-base text-white placeholder:text-white/35 focus:outline-none sm:text-sm"
             />
-            {search && (
+            {search ? (
               <button
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                  inputRef.current?.focus();
+                }}
                 className="shrink-0 text-white/40 hover:text-white"
                 aria-label="Clear"
               >
                 ✕
               </button>
+            ) : (
+              !searchFocused && (
+                /* the "/" shortcut focuses this box — a quiet hint on ≥sm */
+                <kbd
+                  aria-hidden
+                  className="pointer-events-none hidden shrink-0 rounded-[2px] border border-white/10 px-1.5 py-0.5 font-mono text-[10px] leading-none text-white/25 sm:block"
+                >
+                  /
+                </kbd>
+              )
             )}
           </div>
 
-          {suggestionsOpen && (
+          {(suggestionsOpen || showHint || noMatches) && (
             /* opens upward on mobile (the bar is at the bottom), downward on ≥sm */
-            <div className="scroll-thin absolute bottom-full mb-2 max-h-[45vh] w-full overflow-y-auto rounded-[2px] border border-white/10 bg-[#141414]/80 py-1 shadow-2xl backdrop-blur-xl sm:bottom-auto sm:top-full sm:mb-0 sm:mt-2 sm:max-h-80">
-              {searchResults.map((m) => (
-                <button
-                  key={m.id}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    const label = search.trim();
-                    setSearch("");
-                    selectAirport(m.id, { orgIds: m.matchedOrgIds, label });
-                  }}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-white/5"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-white">
-                      {m.name}
-                    </span>
-                    <span className="block truncate text-xs text-white/40">
-                      {m.city ? m.city + " · " : ""}
-                      {m.countryCode ?? ""}
-                    </span>
-                    {/* why this airport matched, when it wasn't the name */}
-                    {m.matchedOrgs.length > 0 && (
-                      <span className="mt-0.5 block truncate text-[11px] text-accent-bright/70">
-                        {m.matchedOrgs.join(" · ")}
-                      </span>
-                    )}
-                    {m.matchedScope.length > 0 && (
-                      <span className="mt-0.5 block truncate text-[11px] text-white/45">
-                        {m.matchedScope.join(" · ")}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono text-xs text-accent-bright">
-                      {m.iata ?? m.icao}
-                    </span>
-                    <span
-                      className="rounded-[2px] bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60"
-                      title={
-                        m.orgCount < m.totalOrgCount
-                          ? `${m.orgCount} of ${m.totalOrgCount} organisations match`
-                          : `${m.orgCount} organisations`
-                      }
-                    >
-                      {m.orgCount < m.totalOrgCount
-                        ? `${m.orgCount}/${m.totalOrgCount}`
-                        : m.orgCount}
-                    </span>
-                  </span>
-                </button>
-              ))}
+            <div className="absolute bottom-full mb-2 w-full sm:bottom-auto sm:top-full sm:mb-0 sm:mt-2">
+              <div className="scroll-thin max-h-[45vh] overflow-y-auto rounded-[2px] border border-white/10 bg-[#141414]/80 shadow-2xl backdrop-blur-xl sm:max-h-80">
+                {suggestionsOpen && (
+                  <div ref={listRef} id="search-listbox" role="listbox" className="py-1">
+                    {searchResults.map((m, i) => (
+                      <button
+                        key={m.id}
+                        id={`search-opt-${i}`}
+                        data-idx={i}
+                        role="option"
+                        aria-selected={i === activeIndex}
+                        onMouseEnter={() => setActiveIndex(i)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          commitHit(m);
+                        }}
+                        className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors ${
+                          i === activeIndex ? "bg-white/10" : "hover:bg-white/5"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm text-white">
+                            {m.name}
+                          </span>
+                          <span className="block truncate text-xs text-white/40">
+                            {m.city ? m.city + " · " : ""}
+                            {m.countryCode ?? ""}
+                          </span>
+                          {/* why this airport matched, when it wasn't the name */}
+                          {m.matchedOrgs.length > 0 && (
+                            <span className="mt-0.5 block truncate text-[11px] text-accent-bright/70">
+                              {m.matchedOrgs.join(" · ")}
+                            </span>
+                          )}
+                          {m.matchedScope.length > 0 && (
+                            <span className="mt-0.5 block truncate text-[11px] text-white/45">
+                              {m.matchedScope.join(" · ")}
+                            </span>
+                          )}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span className="font-mono text-xs text-accent-bright">
+                            {m.iata ?? m.icao}
+                          </span>
+                          <span
+                            className="rounded-[2px] bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60"
+                            title={
+                              m.orgCount < m.totalOrgCount
+                                ? `${m.orgCount} of ${m.totalOrgCount} organisations match`
+                                : `${m.orgCount} organisations`
+                            }
+                          >
+                            {m.orgCount < m.totalOrgCount
+                              ? `${m.orgCount}/${m.totalOrgCount}`
+                              : m.orgCount}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* focus hint on an empty box — teaches what the search accepts */}
+                {showHint && (
+                  <div className="px-3 py-2.5">
+                    <p className="mb-2 text-[10px] uppercase tracking-wide2 text-white/35">
+                      Search by
+                    </p>
+                    <ul className="space-y-1.5">
+                      {(
+                        [
+                          ["Airport, city", "Frankfurt, Hamburg"],
+                          ["Code", "FRA · EDDF"],
+                          ["Organisation", "by company name"],
+                          ["Aircraft, engine", "A320 · 737 · CFM56"],
+                        ] as const
+                      ).map(([label, example]) => (
+                        <li
+                          key={label}
+                          className="flex items-baseline gap-3 text-xs"
+                        >
+                          <span className="w-28 shrink-0 text-white/40">
+                            {label}
+                          </span>
+                          <span className="min-w-0 truncate text-white/65">
+                            {example}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* the query settled with nothing found */}
+                {noMatches && (
+                  <div className="px-3 py-3">
+                    <p className="truncate text-xs text-white/45">
+                      No matches for “{search.trim()}”
+                    </p>
+                    <p className="mt-1 text-[11px] text-white/30">
+                      Try an airport code, city, organisation or aircraft type.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

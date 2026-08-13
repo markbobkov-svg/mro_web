@@ -15,52 +15,15 @@ import { Alert, Field, Input, SubmitButton, Textarea } from "@/components/ui/For
 const EMPTY: ActionState = {};
 
 /**
- * Approvals, scope and stations — read-only, with a "propose a change" form
- * attached to each row. Nothing here writes to the scraped tables; every
- * submission becomes a change request for an admin to apply.
+ * Approvals, scope and stations — read-only registry facts, each with a
+ * "propose a change" form. Nothing here writes to the scraped tables; every
+ * submission becomes a change request for an admin to apply. The three panels
+ * are exported individually and shown as tabs by `DashboardTabs`.
  */
-export function RegulatorySections({ org }: { org: DashboardOrg }) {
-  return (
-    <>
-      <section id="approvals" className="scroll-mt-20">
-        <Heading
-          title="Approvals"
-          note="From the authorities' registers. Propose a correction and we will check it against the certificate."
-        />
-        <ApprovalsPanel org={org} />
-      </section>
-
-      <section id="scope" className="scroll-mt-20">
-        <Heading
-          title="Certified scope"
-          note="Grouped by authority and class rating, exactly as it appears on your card."
-        />
-        <ScopePanel org={org} />
-      </section>
-
-      <section id="stations" className="scroll-mt-20">
-        <Heading
-          title="Stations"
-          note="The airports where you appear on the map."
-        />
-        <StationsPanel org={org} />
-      </section>
-    </>
-  );
-}
-
-function Heading({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-sm font-medium text-white">{title}</h2>
-      <p className="mt-0.5 text-xs leading-relaxed text-white/35">{note}</p>
-    </div>
-  );
-}
 
 // ------------------------------------------------------------- approvals ---
 
-function ApprovalsPanel({ org }: { org: DashboardOrg }) {
+export function ApprovalsPanel({ org }: { org: DashboardOrg }) {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
@@ -228,7 +191,7 @@ function ApprovalChangeForm({
 
 // ----------------------------------------------------------------- scope ---
 
-function ScopePanel({ org }: { org: DashboardOrg }) {
+export function ScopePanel({ org }: { org: DashboardOrg }) {
   const byAuthority = new Map<string, Map<string, DashboardScopeRow[]>>();
   for (const row of org.scope) {
     const cls = row.ratingClass?.trim() || "Other";
@@ -352,7 +315,7 @@ function ScopeChangeForm({ org }: { org: DashboardOrg }) {
 
 // -------------------------------------------------------------- stations ---
 
-function StationsPanel({ org }: { org: DashboardOrg }) {
+export function StationsPanel({ org }: { org: DashboardOrg }) {
   return (
     <div className="space-y-3 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {org.stations.length === 0 ? (

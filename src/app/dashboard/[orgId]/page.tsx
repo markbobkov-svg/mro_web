@@ -4,10 +4,7 @@ import { notFound } from "next/navigation";
 import { getDashboardOrg } from "@/lib/dashboard";
 import { ForbiddenError, requireMember, requireUser } from "@/lib/guards";
 import { Alert } from "@/components/ui/Form";
-import { ProfileForm } from "./ProfileForm";
-import { ContactsEditor } from "./ContactsEditor";
-import { RegulatorySections } from "./RegulatorySections";
-import { ChangeRequestList } from "./ChangeRequestList";
+import { DashboardTabs } from "./DashboardTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +36,8 @@ export default async function OrganisationDashboard({
   const org = await getDashboardOrg(params.orgId);
   if (!org) notFound();
 
-  const pendingCount = org.changeRequests.filter((c) => c.status === "pending").length;
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <Link
           href="/dashboard"
@@ -62,60 +57,7 @@ export default async function OrganisationDashboard({
         </Alert>
       ) : null}
 
-      <nav className="flex flex-wrap gap-2 text-xs">
-        {[
-          ["#profile", "Profile"],
-          ["#contacts", "Contacts"],
-          ["#approvals", "Approvals"],
-          ["#scope", "Scope"],
-          ["#stations", "Stations"],
-          ["#requests", pendingCount > 0 ? `Requests (${pendingCount})` : "Requests"],
-        ].map(([href, label]) => (
-          <a
-            key={href}
-            href={href}
-            className="rounded-[2px] border border-white/10 px-3 py-1.5 text-white/45
-              transition hover:border-white/10 hover:text-white"
-          >
-            {label}
-          </a>
-        ))}
-      </nav>
-
-      <section id="profile" className="scroll-mt-20">
-        <SectionHeading
-          title="Profile"
-          note="Published immediately. Empty fields fall back to what we scraped."
-        />
-        <ProfileForm org={org} />
-      </section>
-
-      <section id="contacts" className="scroll-mt-20">
-        <SectionHeading
-          title="Contacts"
-          note="Published immediately. Once you add one, your contacts replace the scraped ones on the public card."
-        />
-        <ContactsEditor org={org} />
-      </section>
-
-      <RegulatorySections org={org} />
-
-      <section id="requests" className="scroll-mt-20">
-        <SectionHeading
-          title="Change requests"
-          note="Approvals, scope and stations come from the authorities' registers, so changes are checked before they go live."
-        />
-        <ChangeRequestList org={org} />
-      </section>
-    </div>
-  );
-}
-
-function SectionHeading({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-sm font-medium text-white">{title}</h2>
-      <p className="mt-0.5 text-xs leading-relaxed text-white/35">{note}</p>
+      <DashboardTabs org={org} />
     </div>
   );
 }

@@ -47,17 +47,35 @@ export function ProfileForm({ org }: { org: DashboardOrg }) {
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Website" hint={fallbackHint(org.scraped.website)}>
-          <Input name="website" type="url" defaultValue={p?.website ?? ""} />
+        <Field label="Website">
+          <Input
+            name="website"
+            type="url"
+            defaultValue={p?.website ?? org.scraped.website ?? ""}
+            placeholder="https://…"
+          />
         </Field>
-        <Field label="E-mail" hint={fallbackHint(org.scraped.email)}>
-          <Input name="email" type="email" defaultValue={p?.email ?? ""} />
+        <Field label="E-mail">
+          <Input
+            name="email"
+            type="email"
+            defaultValue={p?.email ?? org.scraped.email ?? ""}
+            placeholder="ops@example.com"
+          />
         </Field>
-        <Field label="Phone" hint={fallbackHint(org.scraped.phone)}>
-          <Input name="phone" defaultValue={p?.phone ?? ""} />
+        <Field label="Phone">
+          <Input
+            name="phone"
+            defaultValue={p?.phone ?? org.scraped.phone ?? ""}
+            placeholder="+49 …"
+          />
         </Field>
-        <Field label="Address" hint={fallbackHint(org.scraped.address)}>
-          <Input name="address" defaultValue={p?.address ?? ""} />
+        <Field label="Address">
+          <Input
+            name="address"
+            defaultValue={p?.address ?? org.scraped.address ?? ""}
+            placeholder="Street, City, Country"
+          />
         </Field>
       </div>
 
@@ -87,10 +105,6 @@ export function ProfileForm({ org }: { org: DashboardOrg }) {
       </div>
     </form>
   );
-}
-
-function fallbackHint(value: string | null): string | undefined {
-  return value ? `now: ${value}` : "not on file";
 }
 
 function formatDate(iso: string): string {

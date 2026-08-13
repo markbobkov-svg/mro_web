@@ -219,6 +219,7 @@ export async function getAirportDetail(
     profilesRes,
     managedContactsRes,
     membersRes,
+    managedStationScopeRes,
   ] = await Promise.all([
       supabase
         .from("organisations")
@@ -258,6 +259,18 @@ export async function getAirportDetail(
         .from("organisation_members")
         .select("organisation_id")
         .in("organisation_id", orgIds),
+      // Organisation-owned per-station scope override, for the stations at THIS
+      // airport. Keyed by (organisation_id, airport_id); replaces the scraped
+      // station scope for any org that maintains it here. Additive: if the table
+      // is missing (migration not applied) the query errors softly and the card
+      // falls back to the scraped scope below.
+      supabase
+        .from("organisation_managed_station_scope")
+        .select(
+          "organisation_id, airport_id, authority_code, rating_class_text, scope_text, location_scope, sort_order",
+        )
+        .eq("airport_id", airportId)
+        .order("sort_order"),
     ]);
 
   for (const [label, res] of [
@@ -313,6 +326,13 @@ export async function getAirportDetail(
     authById.set(a.id, { code: a.code, name: a.name ?? null });
   }
 
+  // authority code (upper-cased) -> id, so an organisation's managed scope, which
+  // carries a typed authority code rather than an id, lands in the right group.
+  const codeToAuthId = new Map<string, string>();
+  for (const [id, meta] of authById) {
+    if (meta.code) codeToAuthId.set(meta.code.toUpperCase(), id);
+  }
+
   const AUTH_NONE = "∅";
 
   // organisation_station_scope has an authority_id column, but the scraper does
@@ -331,6 +351,44 @@ export async function getAirportDetail(
     }
   }
 
+  // Organisation-owned station scope overrides the scraped station scope: for any
+  // org that maintains its own scope at this airport, drop its scraped station
+  // rows and substitute the managed ones (normalised to the scraped shape, and
+  // tagged to that org's station(s) here so line/base still key per station).
+  // Same "once you touch it, you own it" rule as managed contacts. Missing table
+  // => empty map => the scraped scope shows unchanged.
+  const managedScopeByOrg = new Map<string, any[]>();
+  if (!managedStationScopeRes.error) {
+    for (const m of (managedStationScopeRes.data as any[]) ?? []) {
+      const list = managedScopeByOrg.get(m.organisation_id) ?? [];
+      list.push(m);
+      managedScopeByOrg.set(m.organisation_id, list);
+    }
+  }
+
+  const effectiveScopeRows: any[] = [];
+  for (const sc of scopeRows) {
+    if (!managedScopeByOrg.has(sc.organisation_id)) effectiveScopeRows.push(sc);
+  }
+  for (const s of stationRows) {
+    const managed = managedScopeByOrg.get(s.organisation_id);
+    if (!managed) continue;
+    for (const m of managed) {
+      effectiveScopeRows.push({
+        organisation_id: s.organisation_id,
+        station_id: s.id,
+        authority_id:
+          codeToAuthId.get(String(m.authority_code ?? "").toUpperCase()) ?? null,
+        rating_class_text: m.rating_class_text,
+        rating_class_text_en: null,
+        scope_text: m.scope_text,
+        scope_text_en: null,
+        location_scope: m.location_scope,
+        source_url: null,
+      });
+    }
+  }
+
   // --- per-station scope: group org -> authority -> class -> items ---
   // Classes are keyed case-insensitively so scraped variants like
   // "Components…" and "COMPONENTS…" collapse into one group (first label wins).
@@ -342,7 +400,7 @@ export async function getAirportDetail(
     string,
     Map<string, Map<string, ClassGroup>>
   >();
-  for (const sc of scopeRows) {
+  for (const sc of effectiveScopeRows) {
     const org = sc.organisation_id;
     const auth =
       sc.authority_id ||
@@ -422,9 +480,10 @@ export async function getAirportDetail(
   }
 
   // Per-station line/base summary (the org header badge), from the same
-  // station-scope rows now that they are fetched with location_scope.
+  // station-scope rows (managed override applied) now that they are fetched with
+  // location_scope.
   const stationLocScope = new Map<string, (string | null)[]>();
-  for (const sc of scopeRows) {
+  for (const sc of effectiveScopeRows) {
     const list = stationLocScope.get(sc.station_id) ?? [];
     list.push(sc.location_scope ?? null);
     stationLocScope.set(sc.station_id, list);

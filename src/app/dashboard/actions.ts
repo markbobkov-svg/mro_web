@@ -341,6 +341,268 @@ export async function importScrapedContactsAction(
   return { notice: "Imported — edit them as you like." };
 }
 
+// ---------------------------------------------------- station scope ---------
+
+/**
+ * Per-station certified scope — the lines shown on the public card for each
+ * airport. These publish instantly (the organisation stating what it works at a
+ * station, not a fact copied from a register), and they live in their own
+ * override table so a re-scrape can never wipe them. For any airport the
+ * organisation maintains here, the managed rows replace the scraped station
+ * scope on the card entirely — the same rule as managed contacts.
+ */
+
+function locationScope(data: FormData, key: string): string | null {
+  const v = str(data, key).toLowerCase();
+  return v === "line" || v === "base" || v === "both" ? v : null;
+}
+
+/** Membership already checked — is this airport actually one of the org's? */
+async function orgHasAirport(
+  supabase: ReturnType<typeof getAdminSupabase>,
+  organisationId: string,
+  airportId: string,
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("organisation_stations")
+    .select("id")
+    .eq("organisation_id", organisationId)
+    .eq("airport_id", airportId);
+  return ((data as Record<string, unknown>[]) ?? []).map((r) => String(r.id));
+}
+
+export async function saveStationScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const airportId = str(data, "airportId");
+  const scopeId = nullable(data, "scopeId");
+  const scopeText = nullable(data, "scopeText");
+
+  if (!airportId) return { error: "Pick a station first." };
+  if (!scopeText) {
+    return { error: "Enter the scope line — a class on its own has nothing to show." };
+  }
+
+  const row = {
+    organisation_id: organisationId,
+    airport_id: airportId,
+    authority_code: nullable(data, "authorityCode"),
+    rating_class_text: nullable(data, "ratingClass"),
+    scope_text: scopeText,
+    location_scope: locationScope(data, "locationScope"),
+    sort_order: Number(str(data, "sortOrder") || 0),
+  };
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+
+    const stationIds = await orgHasAirport(supabase, organisationId, airportId);
+    if (stationIds.length === 0) {
+      return { error: "You don't have a station at that airport." };
+    }
+
+    if (scopeId) {
+      // Scope the update by organisation too, so a swapped id cannot reach
+      // another organisation's row.
+      const { error } = await supabase
+        .from("organisation_managed_station_scope")
+        .update(row)
+        .eq("id", scopeId)
+        .eq("organisation_id", organisationId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("organisation_managed_station_scope")
+        .insert(row);
+      if (error) throw error;
+    }
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+  return { notice: scopeId ? "Scope line updated." : "Scope line added." };
+}
+
+export async function deleteStationScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const scopeId = str(data, "scopeId");
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    const { error } = await supabase
+      .from("organisation_managed_station_scope")
+      .delete()
+      .eq("id", scopeId)
+      .eq("organisation_id", organisationId);
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+  return { notice: "Scope line removed." };
+}
+
+/**
+ * Copy the scraped station scope for one airport into the managed table so the
+ * organisation can edit from what is already published instead of retyping it.
+ * From then on the managed rows are what the card shows for that station.
+ */
+export async function importStationScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const airportId = str(data, "airportId");
+
+  if (!airportId) return { error: "Pick a station first." };
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+
+    const stationIds = await orgHasAirport(supabase, organisationId, airportId);
+    if (stationIds.length === 0) {
+      return { error: "You don't have a station at that airport." };
+    }
+
+    const { data: already } = await supabase
+      .from("organisation_managed_station_scope")
+      .select("id")
+      .eq("organisation_id", organisationId)
+      .eq("airport_id", airportId)
+      .limit(1);
+    if (already && already.length > 0) {
+      return { error: "You already maintain this station's scope." };
+    }
+
+    // Resolve each scraped row to an authority code the same way the card does:
+    // by authority_id, else by matching source_url to one of the org's approvals.
+    const [scopeRes, apprRes, authRes] = await Promise.all([
+      supabase
+        .from("organisation_station_scope")
+        .select(
+          "authority_id, source_url, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope",
+        )
+        .in("station_id", stationIds)
+        .limit(3000),
+      supabase
+        .from("organisation_approvals")
+        .select("source_url, authorities(code)")
+        .eq("organisation_id", organisationId),
+      supabase.from("authorities").select("id, code"),
+    ]);
+
+    const codeById = new Map<string, string>();
+    for (const a of (authRes.data as Record<string, unknown>[]) ?? []) {
+      if (a.code) codeById.set(String(a.id), String(a.code));
+    }
+    const codeBySourceUrl = new Map<string, string>();
+    for (const ap of (apprRes.data as Record<string, unknown>[]) ?? []) {
+      const code = (embeddedCode(ap.authorities) ?? "").trim();
+      const url = (ap.source_url as string | null) ?? null;
+      if (url && code && !codeBySourceUrl.has(url)) codeBySourceUrl.set(url, code);
+    }
+
+    const scraped = (scopeRes.data as Record<string, unknown>[]) ?? [];
+    const rows = scraped
+      .map((s, i) => {
+        const authId = (s.authority_id as string | null) ?? null;
+        const url = (s.source_url as string | null) ?? null;
+        const code =
+          (authId && codeById.get(authId)) ||
+          (url && codeBySourceUrl.get(url)) ||
+          null;
+        const ls = String(s.location_scope ?? "").toLowerCase();
+        return {
+          organisation_id: organisationId,
+          airport_id: airportId,
+          authority_code: code,
+          rating_class_text:
+            (s.rating_class_text_en as string | null) ??
+            (s.rating_class_text as string | null) ??
+            null,
+          scope_text:
+            (s.scope_text_en as string | null) ??
+            (s.scope_text as string | null) ??
+            null,
+          location_scope:
+            ls === "line" || ls === "base" || ls === "both" ? ls : null,
+          sort_order: i,
+        };
+      })
+      .filter((r) => r.scope_text);
+
+    if (rows.length === 0) {
+      return {
+        error:
+          "There is no scraped scope for this station to import — add lines directly.",
+      };
+    }
+
+    const { error } = await supabase
+      .from("organisation_managed_station_scope")
+      .insert(rows);
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+  return { notice: "Imported — edit the lines as you like." };
+}
+
+/** Drop every managed line for one airport, so the card falls back to scraped. */
+export async function revertStationScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const airportId = str(data, "airportId");
+
+  if (!airportId) return { error: "Pick a station first." };
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    const { error } = await supabase
+      .from("organisation_managed_station_scope")
+      .delete()
+      .eq("organisation_id", organisationId)
+      .eq("airport_id", airportId);
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+  return { notice: "Reverted to the scraped scope for this station." };
+}
+
+/** PostgREST returns an embedded relation as an object or a one-element array. */
+function embeddedCode(value: unknown): string | null {
+  if (!value) return null;
+  const obj = Array.isArray(value) ? value[0] : value;
+  const code = (obj as Record<string, unknown> | undefined)?.code;
+  return typeof code === "string" ? code : null;
+}
+
 // -------------------------------------------------- moderated proposals ---
 
 /**

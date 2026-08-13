@@ -7,7 +7,6 @@ import { proposeChangeAction, type ActionState } from "../actions";
 import type {
   DashboardApproval,
   DashboardOrg,
-  DashboardScopeRow,
   DashboardStation,
 } from "@/lib/dashboard";
 import { Alert, Field, Input, SubmitButton, Textarea } from "@/components/ui/Form";
@@ -15,10 +14,11 @@ import { Alert, Field, Input, SubmitButton, Textarea } from "@/components/ui/For
 const EMPTY: ActionState = {};
 
 /**
- * Approvals, scope and stations — read-only registry facts, each with a
- * "propose a change" form. Nothing here writes to the scraped tables; every
- * submission becomes a change request for an admin to apply. The three panels
- * are exported individually and shown as tabs by `DashboardTabs`.
+ * Approvals and stations — read-only registry facts, each with a "propose a
+ * change" form. Nothing here writes to the scraped tables; every submission
+ * becomes a change request for an admin to apply. Both panels are exported
+ * individually and shown as tabs by `DashboardTabs`. (Per-station scope, which
+ * publishes instantly, lives in its own `StationScopeEditor`.)
  */
 
 // ------------------------------------------------------------- approvals ---
@@ -185,130 +185,6 @@ function ApprovalChangeForm({
           </button>
         ) : null}
       </div>
-    </form>
-  );
-}
-
-// ----------------------------------------------------------------- scope ---
-
-export function ScopePanel({ org }: { org: DashboardOrg }) {
-  const byAuthority = new Map<string, Map<string, DashboardScopeRow[]>>();
-  for (const row of org.scope) {
-    const cls = row.ratingClass?.trim() || "Other";
-    let classes = byAuthority.get(row.authorityCode);
-    if (!classes) {
-      classes = new Map();
-      byAuthority.set(row.authorityCode, classes);
-    }
-    const list = classes.get(cls) ?? [];
-    list.push(row);
-    classes.set(cls, list);
-  }
-
-  return (
-    <div className="space-y-4 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
-      {org.scope.length === 0 ? (
-        <p className="text-sm text-white/35">No scope on file yet.</p>
-      ) : (
-        [...byAuthority.entries()].map(([authority, classes]) => (
-          <div key={authority}>
-            <p className="mb-2 text-[10px] uppercase tracking-wide2 text-white/45">
-              {authority}
-            </p>
-            <div className="space-y-2">
-              {[...classes.entries()].map(([cls, rows]) => (
-                <details
-                  key={cls}
-                  className="rounded-[2px] border border-white/10 bg-black/40 px-3 py-2"
-                >
-                  <summary className="cursor-pointer text-sm text-white/85">
-                    {cls}
-                    <span className="ml-2 text-xs text-white/35">
-                      {rows.length} line{rows.length === 1 ? "" : "s"}
-                    </span>
-                  </summary>
-                  <ul className="mt-2 space-y-1">
-                    {rows.slice(0, 40).map((r) => (
-                      <li key={r.id} className="text-xs leading-relaxed text-white/45">
-                        {r.scopeText ?? r.ratingText}
-                        {r.locationScope ? (
-                          <span className="ml-2 text-white/25">
-                            [{r.locationScope}]
-                          </span>
-                        ) : null}
-                      </li>
-                    ))}
-                    {rows.length > 40 ? (
-                      <li className="text-xs text-white/25">
-                        …and {rows.length - 40} more
-                      </li>
-                    ) : null}
-                  </ul>
-                </details>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
-
-      <AddToggle label="+ Propose a scope change">
-        <ScopeChangeForm org={org} />
-      </AddToggle>
-    </div>
-  );
-}
-
-function ScopeChangeForm({ org }: { org: DashboardOrg }) {
-  const [state, action] = useFormState(proposeChangeAction, EMPTY);
-  const [mode, setMode] = useState<"add" | "remove">("add");
-
-  return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name="organisationId" value={org.id} />
-      <input type="hidden" name="target" value="scope" />
-      <input type="hidden" name="action" value={mode} />
-
-      {state.error ? <Alert kind="error">{state.error}</Alert> : null}
-      {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
-
-      <div className="flex gap-2">
-        <ModeButton active={mode === "add"} onClick={() => setMode("add")}>
-          Something is missing
-        </ModeButton>
-        <ModeButton active={mode === "remove"} onClick={() => setMode("remove")}>
-          Something is wrong
-        </ModeButton>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Authority">
-          <Input name="authorityCode" placeholder="EASA" />
-        </Field>
-        <Field label="Class rating">
-          <Input name="ratingClass" placeholder="A1 / C6 / Components" />
-        </Field>
-      </div>
-
-      <Field label="Scope line" hint="as it should read on the certificate">
-        <Textarea
-          name="scopeText"
-          rows={2}
-          placeholder="Boeing 737-600/700/800/900 (CFM56)"
-        />
-      </Field>
-
-      <Field label="Line or base" hint="line, base, or both">
-        <Input name="locationScope" placeholder="both" />
-      </Field>
-
-      <Field
-        label="Note for the reviewer"
-        hint={mode === "remove" ? "required" : "link to the certificate page"}
-      >
-        <Textarea name="note" rows={2} />
-      </Field>
-
-      <SubmitButton pendingLabel="Sending…">Send for review</SubmitButton>
     </form>
   );
 }

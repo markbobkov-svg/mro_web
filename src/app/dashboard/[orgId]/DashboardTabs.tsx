@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import type { DashboardOrg } from "@/lib/dashboard";
 import { ProfileForm } from "./ProfileForm";
 import { ContactsEditor } from "./ContactsEditor";
-import { ApprovalsPanel, ScopePanel, StationsPanel } from "./RegulatorySections";
+import { ApprovalsPanel, StationsPanel } from "./RegulatorySections";
+import { StationScopeEditor } from "./StationScopeEditor";
 import { ChangeRequestList } from "./ChangeRequestList";
 
 /**
@@ -63,8 +64,8 @@ const TABS: TabDef[] = [
     key: "scope",
     label: "Scope",
     title: "Certified scope",
-    note: "Grouped by authority and class rating, exactly as it appears on your card.",
-    publish: "review",
+    note: "The scope shown on your card, per station. Pick a station and edit its lines — changes go live immediately.",
+    publish: "instant",
   },
   {
     key: "stations",
@@ -179,7 +180,7 @@ function PanelBody({ tab, org }: { tab: TabKey; org: DashboardOrg }) {
     case "approvals":
       return <ApprovalsPanel org={org} />;
     case "scope":
-      return <ScopePanel org={org} />;
+      return <StationScopeEditor org={org} />;
     case "stations":
       return <StationsPanel org={org} />;
     case "requests":

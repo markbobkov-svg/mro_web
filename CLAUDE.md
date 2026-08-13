@@ -101,7 +101,10 @@ contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
 ## Organisation dashboard (`/dashboard`, `/admin`)
 
 Part-145 organisations claim their listing and maintain it themselves.
-Migration: `supabase/migrations/0001_org_dashboard.sql`.
+Migrations: `supabase/migrations/0001_org_dashboard.sql` (accounts, claims,
+moderation, the profile/contacts override layer) and
+`supabase/migrations/0002_managed_station_scope.sql` (the per-station scope
+override layer). Both are applied by hand in the Supabase SQL editor.
 
 - **Accounts** are Supabase Auth, e-mail + password, confirmation required.
   All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
@@ -112,22 +115,34 @@ Migration: `supabase/migrations/0001_org_dashboard.sql`.
   auto-approve. Organisations *not yet in the DB* are always reviewed by hand,
   and the organisation row is created on approval.
 - **What an organisation may edit directly:** profile (tagline, description,
-  logo, website/e-mail/phone/address overrides, AOG desk) and contacts. These
+  logo, website/e-mail/phone/address overrides, AOG desk), contacts, and the
+  **per-station certified scope** shown on its card (the Scope tab). These
   publish immediately.
-- **What goes through moderation:** approvals, scope and stations — regulatory
-  facts from the authorities' registers. Organisations file change requests;
-  an admin applies them from `/admin`.
+- **What goes through moderation:** approvals and stations — regulatory facts
+  from the authorities' registers. Organisations file change requests; an admin
+  applies them from `/admin`. (Per-station scope used to be here too, but an
+  organisation knows what it works at each station better than a reviewer does,
+  so it moved to instant-publish via its own override table — see below.)
 - **Admin** is the `app_users.is_admin` flag; there is no separate role table.
 
 ### The rule that keeps scraper and dashboard from fighting
 
-The scraper owns `organisations`, `organisation_approvals`, `organisation_scope`
-and re-writes them on every run. **Nothing an organisation types is ever stored
-in those tables.** Edits live in `organisation_profiles` and
-`organisation_managed_contacts` and are merged *over* the scraped rows at read
-time in `getAirportDetail`, so a re-scrape cannot wipe them. Precedence is
+The scraper owns `organisations`, `organisation_approvals`, `organisation_scope`,
+`organisation_station_scope` and re-writes them on every run. **Nothing an
+organisation types is ever stored in those tables.** Edits live in
+`organisation_profiles`, `organisation_managed_contacts` and
+`organisation_managed_station_scope`, and are merged *over* the scraped rows at
+read time in `getAirportDetail`, so a re-scrape cannot wipe them. Precedence is
 organisation → station → scraped organisation row; an organisation that adds
 any managed contact replaces the scraped contact list outright.
+
+The per-station scope override follows the same "once you touch it, you own it"
+rule, per station: for any airport an organisation maintains, its managed lines
+replace the scraped `organisation_station_scope` for that station on the card.
+It keys on `(organisation_id, airport_id)`, **not** `station_id`, so it survives
+the scraper regenerating station rows — the id it can churn is never the id we
+key our own rows off. Authority is stored as the code the organisation types
+(`EASA`, `FAA`) and matched to `authorities.code` at read time.
 
 The one place this does not hold is an **admin-approved change request**, which
 writes to the scraped tables by design — so a later scrape can revert it. If

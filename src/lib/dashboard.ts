@@ -44,15 +44,6 @@ export interface DashboardApproval {
   sourceUrl: string | null;
 }
 
-export interface DashboardScopeRow {
-  id: string;
-  authorityCode: string;
-  ratingClass: string | null;
-  ratingText: string | null;
-  scopeText: string | null;
-  locationScope: string | null;
-}
-
 export interface DashboardStation {
   id: string;
   airportId: string | null;
@@ -62,6 +53,25 @@ export interface DashboardStation {
   address: string | null;
   phone: string | null;
   email: string | null;
+}
+
+/** One line of the organisation's own per-station scope (instant-publish). */
+export interface ManagedStationScopeRow {
+  id: string;
+  airportId: string;
+  authorityCode: string | null;
+  ratingClass: string | null;
+  scopeText: string | null;
+  locationScope: string | null;
+  sortOrder: number;
+}
+
+/** Scraped per-station scope — the "currently live" reference before takeover. */
+export interface ScrapedStationScopeRow {
+  airportId: string | null;
+  ratingClass: string | null;
+  scopeText: string | null;
+  locationScope: string | null;
 }
 
 export interface ChangeRequest {
@@ -213,8 +223,11 @@ export interface DashboardOrg {
   contacts: ManagedContact[];
   scrapedContacts: ManagedContact[];
   approvals: DashboardApproval[];
-  scope: DashboardScopeRow[];
   stations: DashboardStation[];
+  /** Organisation-maintained per-station scope (what shows on the card). */
+  stationScope: ManagedStationScopeRow[];
+  /** Scraped per-station scope, shown as the "currently live" reference. */
+  scrapedStationScope: ScrapedStationScopeRow[];
   changeRequests: ChangeRequest[];
 }
 
@@ -222,8 +235,17 @@ export interface DashboardOrg {
 export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | null> {
   const supabase = getAdminSupabase();
 
-  const [orgRes, profileRes, contactsRes, scrapedContactsRes, approvalsRes, scopeRes, stationsRes, crRes] =
-    await Promise.all([
+  const [
+    orgRes,
+    profileRes,
+    contactsRes,
+    scrapedContactsRes,
+    approvalsRes,
+    stationsRes,
+    crRes,
+    stationScopeRes,
+    scrapedStationScopeRes,
+  ] = await Promise.all([
       supabase
         .from("organisations")
         .select("id, name, legal_name, country_code, website, email, phone, address")
@@ -251,13 +273,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
         )
         .eq("organisation_id", orgId),
       supabase
-        .from("organisation_scope")
-        .select(
-          "id, rating_class_text_en, rating_class_text, rating_text_en, rating_text, scope_text_en, scope_text, location_scope, authorities(code)",
-        )
-        .eq("organisation_id", orgId)
-        .limit(400),
-      supabase
         .from("organisation_stations")
         .select("id, airport_id, address, phone, email, airports(name, iata_code, icao_code)")
         .eq("organisation_id", orgId),
@@ -267,12 +282,65 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
         .eq("organisation_id", orgId)
         .order("created_at", { ascending: false })
         .limit(50),
+      // Organisation-owned per-station scope (instant-publish overrides) and the
+      // scraped station scope it can take over. Both are gated below so the
+      // dashboard still loads if the 0002 migration has not been applied.
+      supabase
+        .from("organisation_managed_station_scope")
+        .select(
+          "id, airport_id, authority_code, rating_class_text, scope_text, location_scope, sort_order",
+        )
+        .eq("organisation_id", orgId)
+        .order("sort_order"),
+      supabase
+        .from("organisation_station_scope")
+        .select(
+          "station_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope",
+        )
+        .eq("organisation_id", orgId)
+        .limit(3000),
     ]);
 
   const org = orgRes.data as Record<string, unknown> | null;
   if (!org) return null;
 
   const p = profileRes.data as Record<string, unknown> | null;
+
+  // station id -> airport id, so scraped station scope (keyed by station) can be
+  // grouped by airport alongside the managed overrides (keyed by airport).
+  const stationIdToAirport = new Map<string, string | null>();
+  for (const st of (stationsRes.data as Record<string, unknown>[]) ?? []) {
+    stationIdToAirport.set(String(st.id), (st.airport_id as string | null) ?? null);
+  }
+
+  const stationScope: ManagedStationScopeRow[] = stationScopeRes.error
+    ? []
+    : ((stationScopeRes.data as Record<string, unknown>[]) ?? []).map((s) => ({
+        id: String(s.id),
+        airportId: String(s.airport_id),
+        authorityCode: (s.authority_code as string | null) ?? null,
+        ratingClass: (s.rating_class_text as string | null) ?? null,
+        scopeText: (s.scope_text as string | null) ?? null,
+        locationScope: (s.location_scope as string | null) ?? null,
+        sortOrder: Number(s.sort_order ?? 0),
+      }));
+
+  const scrapedStationScope: ScrapedStationScopeRow[] = scrapedStationScopeRes.error
+    ? []
+    : ((scrapedStationScopeRes.data as Record<string, unknown>[]) ?? [])
+        .map((s) => ({
+          airportId: stationIdToAirport.get(String(s.station_id)) ?? null,
+          ratingClass:
+            (s.rating_class_text_en as string | null) ??
+            (s.rating_class_text as string | null) ??
+            null,
+          scopeText:
+            (s.scope_text_en as string | null) ??
+            (s.scope_text as string | null) ??
+            null,
+          locationScope: (s.location_scope as string | null) ?? null,
+        }))
+        .filter((s) => s.scopeText);
 
   return {
     id: String(org.id),
@@ -333,19 +401,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
         sourceUrl: (a.source_url as string | null) ?? null,
       };
     }),
-    scope: ((scopeRes.data as Record<string, unknown>[]) ?? []).map((s) => ({
-      id: String(s.id),
-      authorityCode: String(embedded(s.authorities)?.code ?? "Other"),
-      ratingClass:
-        (s.rating_class_text_en as string | null) ??
-        (s.rating_class_text as string | null) ??
-        null,
-      ratingText:
-        (s.rating_text_en as string | null) ?? (s.rating_text as string | null) ?? null,
-      scopeText:
-        (s.scope_text_en as string | null) ?? (s.scope_text as string | null) ?? null,
-      locationScope: (s.location_scope as string | null) ?? null,
-    })),
     stations: ((stationsRes.data as Record<string, unknown>[]) ?? []).map((st) => {
       const ap = embedded(st.airports);
       return {
@@ -359,6 +414,8 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
         email: (st.email as string | null) ?? null,
       };
     }),
+    stationScope,
+    scrapedStationScope,
     changeRequests: ((crRes.data as Record<string, unknown>[]) ?? []).map(readChangeRequest),
   };
 }

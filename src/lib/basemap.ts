@@ -13,6 +13,12 @@ export interface BasemapProps {
   /** Called if this engine can't start (e.g. the CDN lib fails to load), so the
    *  parent can fall back to the other engine. */
   onFail?: () => void;
+  /** Passive backdrop use (the signed-out landing): disable pan/zoom handlers.
+   *  Defaults to true — the map is interactive everywhere else. */
+  interactive?: boolean;
+  /** Show the zoom + attribution controls. Defaults to true; the landing turns
+   *  them off (they would be blurred) and prints its own sharp credit. */
+  controls?: boolean;
 }
 
 /** True if the browser can create a WebGL context (needed for the vector map). */

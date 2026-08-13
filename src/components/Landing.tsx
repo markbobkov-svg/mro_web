@@ -1,18 +1,20 @@
 import Link from "next/link";
 
+import MapBackdrop from "./MapBackdrop";
+
 /**
  * The front door for signed-out visitors.
  *
  * The map is the product, so it sits behind a sign-in wall: this page is what an
- * unauthenticated request to `/` renders instead (see src/app/page.tsx). It
- * keeps the map's visual language — a dark field of glowing "stations" blurred
- * behind frosted glass — and routes the two audiences to their own sign-up:
- * airlines/operators to the airline registration, Part-145 organisations to the
- * account sign-up that leads into the claim flow.
+ * unauthenticated request to `/` renders instead (see src/app/page.tsx). The
+ * backdrop is our own map, blurred behind frosted glass (MapBackdrop), over a
+ * static field that shows while it loads or if WebGL is missing. It routes the
+ * two audiences to their own sign-up: airlines/operators to the airline
+ * registration, Part-145 organisations to the account sign-up that leads into
+ * the claim flow.
  *
- * Server component: every action is a link, so there is no client JS and nothing
- * to hydrate. The backdrop is deliberately markerless — no organisation data
- * reaches a signed-out visitor, the whole point of the wall.
+ * The map backdrop is deliberately markerless — no organisation data reaches a
+ * signed-out visitor, the whole point of the wall — and non-interactive.
  */
 export function Landing({
   organisationCount = 0,
@@ -23,7 +25,9 @@ export function Landing({
 
   return (
     <main className="relative h-viewport w-full overflow-y-auto overflow-x-hidden scroll-thin bg-black">
-      <Backdrop />
+      <BaseField />
+      <MapBackdrop />
+      <Scrim />
 
       <div className="relative z-10 mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center px-5 py-16">
         {/* Brand */}
@@ -91,6 +95,27 @@ export function Landing({
           Access is free — an account keeps the map and the organisation data it
           holds for the industry it serves.
         </p>
+        <p className="mx-auto mt-3 max-w-md text-center text-[11px] leading-relaxed text-white/20">
+          Basemap ©{" "}
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noreferrer"
+            className="underline-offset-2 transition hover:text-white/40 hover:underline"
+          >
+            OpenStreetMap
+          </a>{" "}
+          contributors, rendered with{" "}
+          <a
+            href="https://protomaps.com"
+            target="_blank"
+            rel="noreferrer"
+            className="underline-offset-2 transition hover:text-white/40 hover:underline"
+          >
+            Protomaps
+          </a>
+          .
+        </p>
       </div>
     </main>
   );
@@ -132,12 +157,13 @@ function AudienceCard({
 }
 
 /**
- * A markerless, map-evoking backdrop: a scatter of soft "station" glows over a
- * dark radial field, blurred so it reads as the map behind frosted glass. Dot
- * positions are fixed (no random at render, so nothing to mismatch on hydrate)
- * and carry no data.
+ * The static field shown under the map backdrop: a dark radial gradient, a faint
+ * grid, and a scatter of soft "station" glows. The real map (MapBackdrop) paints
+ * over this once it loads and covers it; until then — and if WebGL is missing —
+ * this is what shows. Dot positions are fixed (no random at render, nothing to
+ * mismatch on hydrate) and carry no data.
  */
-function Backdrop() {
+function BaseField() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {/* Deep field + centre glow */}
@@ -153,7 +179,7 @@ function Backdrop() {
         }}
       />
 
-      {/* Station glows, blurred behind the glass */}
+      {/* Station glows */}
       <div className="absolute inset-0 blur-[2px]">
         {STATIONS.map((s, i) => (
           <span
@@ -170,9 +196,21 @@ function Backdrop() {
           />
         ))}
       </div>
+    </div>
+  );
+}
 
-      {/* Scrim for legibility */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-black/80" />
+/**
+ * Darkens the (real, detailed) map enough for the white gate text to read, while
+ * keeping the map clearly visible. A centre vignette plus a top-to-bottom fade.
+ */
+function Scrim() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0.62)_58%,rgba(0,0,0,0.86)_100%)]"
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-black/75" />
     </div>
   );
 }

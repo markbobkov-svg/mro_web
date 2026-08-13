@@ -93,7 +93,10 @@ function loadLibs(): Promise<Libs> {
 }
 
 const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
-  function VectorBasemap({ markers, activeId, onSelect, onFail }, ref) {
+  function VectorBasemap(
+    { markers, activeId, onSelect, onFail, interactive = true, controls = true },
+    ref,
+  ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const glRef = useRef<any>(null);
@@ -265,27 +268,33 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
             attributionControl: false,
             dragRotate: false,
             pitchWithRotate: false,
+            // Backdrop use (the landing) passes interactive=false to freeze it.
+            interactive,
           });
         } catch {
           if (!cancelled) onFail?.();
           return;
         }
         mapRef.current = map;
-        map.addControl(
-          new maplibregl.NavigationControl({ showCompass: false }),
-          "bottom-right",
-        );
-        // Required OpenStreetMap attribution. Compact = a small "ⓘ" that expands
-        // on click, so the map still reads as ours while staying ODbL-compliant.
-        // customAttribution guarantees it regardless of source-load timing; it
-        // matches the source string above, so MapLibre shows it once, not twice.
-        map.addControl(
-          new maplibregl.AttributionControl({
-            compact: true,
-            customAttribution: ATTRIB,
-          }),
-          "bottom-right",
-        );
+        if (controls) {
+          map.addControl(
+            new maplibregl.NavigationControl({ showCompass: false }),
+            "bottom-right",
+          );
+          // Required OpenStreetMap attribution. Compact = a small "ⓘ" that expands
+          // on click, so the map still reads as ours while staying ODbL-compliant.
+          // customAttribution guarantees it regardless of source-load timing; it
+          // matches the source string above, so MapLibre shows it once, not twice.
+          map.addControl(
+            new maplibregl.AttributionControl({
+              compact: true,
+              customAttribution: ATTRIB,
+            }),
+            "bottom-right",
+          );
+        }
+        // Backdrop use turns controls off (they would be blurred); the landing
+        // prints its own sharp OpenStreetMap credit to stay ODbL-compliant.
 
         const applyScale = () =>
           containerRef.current?.style.setProperty(

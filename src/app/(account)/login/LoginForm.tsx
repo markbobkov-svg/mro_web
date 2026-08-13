@@ -74,6 +74,16 @@ export function LoginForm({
           </Link>
         </div>
 
+        <p className="text-center text-xs text-white/35">
+          An airline or operator?{" "}
+          <Link
+            href="/airline/register"
+            className="text-white/70 transition hover:text-white"
+          >
+            Register here
+          </Link>
+        </p>
+
         {showReset ? (
           <form action={resetAction} className="space-y-3 border-t border-white/10 pt-4">
             {resetState.error ? <Alert kind="error">{resetState.error}</Alert> : null}

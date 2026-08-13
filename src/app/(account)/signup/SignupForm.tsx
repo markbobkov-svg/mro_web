@@ -73,6 +73,15 @@ export function SignupForm() {
           Sign in
         </Link>
       </p>
+      <p className="mt-2 text-center text-xs text-white/35">
+        An airline or operator?{" "}
+        <Link
+          href="/airline/register"
+          className="text-white/70 transition hover:text-white"
+        >
+          Register here
+        </Link>
+      </p>
     </div>
   );
 }

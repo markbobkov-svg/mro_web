@@ -159,6 +159,44 @@ first. The migration still enables RLS with restrictive policies as a second
 line of defence, so the database is safe if the key is ever swapped for an anon
 key or a browser-side client appears.
 
+## Airline accounts (`/airline`)
+
+Airlines and operators — the people the map is *for* — get a light account of
+their own. Migration `supabase/migrations/0003_airline_dashboard.sql`
+(`airline_members`, `airline_registrations`), applied by hand like the others.
+It reuses 0001's `claim_status` enum, `touch_updated_at()` and `is_admin()`, and
+the same auth stack (`authApi.ts`, httpOnly-cookie sessions).
+
+- **Deliberately thinner than the organisation side.** Airlines don't appear on
+  the public map, so there is *no listing to claim*, no profile/override layer
+  and no change-request moderation — hence a **simple** dashboard: the airline's
+  own register details (read-only), the account holder's contact details
+  (editable, `app_users`), and a link to the map. The `airlines` table stays
+  scraper-owned; nothing a user types is written to it (except an admin creating
+  a brand-new airline on approval — the one exception, same as `organisations`).
+- **Registration is the whole flow — no separate claim step.** `/airline/register`
+  (public) takes a work e-mail, a password and the airline (type-ahead over
+  `airlines`, or a name to propose if it's not listed). A confirmation mail is
+  always sent; the account can't sign in until it's clicked (`mailer_autoconfirm`
+  is off) — that confirmation is what makes the domain check mean anything.
+- **The rule.** When the confirmed e-mail's domain is the **exact** website
+  domain of the selected airline (`exactDomainMatchesWebsite` — exact, not the
+  subdomain-tolerant `domainsMatch` the org claim uses), the registration is
+  auto-approved; anything else (different domain, free mailbox, no website on
+  file, not-yet-listed airline) queues for an admin in `/admin`.
+- **Confirmation-gated membership.** Registration happens *before* the e-mail is
+  confirmed, so an auto-approved sign-up can't be granted its `airline_members`
+  row on the spot. `activateAirlineMemberships` (called on the dashboard) closes
+  the gap once the account is confirmed; it's idempotent and never grants
+  anything for an unconfirmed account. Admin approval grants membership directly.
+- Same **service_role security model** as the org dashboard: `requireAirlineMember`
+  / `requireAdmin` in `guards.ts` are the boundary, RLS the second line. The
+  airline reads soft-fail (empty) when 0003 hasn't been applied yet, so login
+  routing and `/admin` keep working — the same tolerance `data.ts` shows.
+- **Shares pre-launch TODO #4 (custom SMTP).** Until it's done, airline
+  confirmation mail only reaches the project team's own addresses, so the same
+  "don't advertise it yet" caveat applies.
+
 ## Data model notes
 
 Tables: `airports`, `authorities`, `organisations`, `organisation_stations`,

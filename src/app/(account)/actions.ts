@@ -10,6 +10,7 @@ import {
   signUp,
 } from "@/lib/authApi";
 import { clearSession, ensureAppUser, writeSession } from "@/lib/session";
+import { resolveHomePath } from "@/lib/guards";
 import { siteUrl } from "@/lib/siteUrl";
 
 export interface FormState {
@@ -20,12 +21,6 @@ export interface FormState {
 function str(data: FormData, key: string): string {
   const v = data.get(key);
   return typeof v === "string" ? v.trim() : "";
-}
-
-/** Keep `next` pointing inside this site — an open redirect is not a feature. */
-function safeNext(value: string, fallback = "/dashboard"): string {
-  if (!value.startsWith("/") || value.startsWith("//")) return fallback;
-  return value;
 }
 
 export async function signUpAction(
@@ -69,7 +64,7 @@ export async function signInAction(
 ): Promise<FormState> {
   const email = str(data, "email").toLowerCase();
   const password = str(data, "password");
-  const next = safeNext(str(data, "next"));
+  const rawNext = str(data, "next");
 
   if (!email || !password) return { error: "Enter your e-mail and password." };
 
@@ -95,7 +90,16 @@ export async function signInAction(
   // Accounts created before app_users existed still get a profile row.
   if (userId) await ensureAppUser(userId, email);
 
-  redirect(next);
+  // Honour an explicit destination (a protected page bounced them to login);
+  // otherwise send them to whichever dashboard fits — airlines to /airline, the
+  // rest to /dashboard.
+  const explicit =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") && rawNext !== "/dashboard"
+      ? rawNext
+      : null;
+  const dest = explicit ?? (userId ? await resolveHomePath(userId) : "/dashboard");
+
+  redirect(dest);
 }
 
 export async function signOutAction(): Promise<void> {

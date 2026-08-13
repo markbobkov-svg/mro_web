@@ -421,3 +421,119 @@ export async function rejectChangeAction(
   revalidatePath("/admin");
   return { notice: "Rejected." };
 }
+
+// --------------------------------------------------- airline registrations ---
+
+/**
+ * Approve an airline registration.
+ *
+ * The airline side has no listing to claim — approving simply grants the account
+ * its `airline_members` row. When the person registered an airline that is not in
+ * the DB yet (proposed fields, no `airline_id`), the airline row is created here
+ * first; only `name` is required on `airlines`, the rest is best-effort from what
+ * they typed. As with organisation claims, an admin cannot wave through their own.
+ */
+export async function approveAirlineRegistrationAction(
+  _prev: AdminState,
+  data: FormData,
+): Promise<AdminState> {
+  const admin = await requireAdmin();
+  const registrationId = str(data, "registrationId");
+  const note = nullable(data, "reviewNote");
+  const supabase = getAdminSupabase();
+
+  try {
+    const { data: reg, error: readError } = await supabase
+      .from("airline_registrations")
+      .select("*")
+      .eq("id", registrationId)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!reg) return { error: "That registration no longer exists." };
+    if (reg.status !== "pending") {
+      return { error: "That registration has already been decided." };
+    }
+    if (String(reg.user_id) === admin.id) {
+      return {
+        error:
+          "This is your own registration — another administrator has to decide it.",
+      };
+    }
+
+    let airlineId = reg.airline_id as string | null;
+
+    if (!airlineId) {
+      const { data: created, error: createError } = await supabase
+        .from("airlines")
+        .insert({
+          name: reg.proposed_name,
+          website: reg.proposed_website,
+          country_code: reg.proposed_country_code,
+          source: "dashboard",
+        })
+        .select("id")
+        .single();
+      if (createError) throw createError;
+      airlineId = String(created.id);
+    }
+
+    if (!airlineId) return { error: "This registration has no airline." };
+
+    const { error: memberError } = await supabase
+      .from("airline_members")
+      .upsert(
+        { airline_id: airlineId, user_id: reg.user_id, role: "owner" },
+        { onConflict: "airline_id,user_id" },
+      );
+    if (memberError) throw memberError;
+
+    const { error: updateError } = await supabase
+      .from("airline_registrations")
+      .update({
+        status: "approved",
+        airline_id: airlineId,
+        reviewed_by: admin.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+      })
+      .eq("id", registrationId);
+    if (updateError) throw updateError;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/airline");
+  return { notice: "Approved." };
+}
+
+export async function rejectAirlineRegistrationAction(
+  _prev: AdminState,
+  data: FormData,
+): Promise<AdminState> {
+  const admin = await requireAdmin();
+  const registrationId = str(data, "registrationId");
+  const note = nullable(data, "reviewNote");
+
+  if (!note) return { error: "Give a reason — the applicant sees it." };
+
+  try {
+    const supabase = getAdminSupabase();
+    const { error } = await supabase
+      .from("airline_registrations")
+      .update({
+        status: "rejected",
+        reviewed_by: admin.id,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+      })
+      .eq("id", registrationId)
+      .eq("status", "pending");
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath("/admin");
+  return { notice: "Rejected." };
+}

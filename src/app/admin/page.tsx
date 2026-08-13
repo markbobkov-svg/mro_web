@@ -1,10 +1,12 @@
 import Link from "next/link";
 
 import { getPendingChangeRequests, getPendingClaims } from "@/lib/dashboard";
+import { getPendingAirlineRegistrations } from "@/lib/airlines";
 import { ForbiddenError, requireAdmin } from "@/lib/guards";
 import { Alert } from "@/components/ui/Form";
 import { ClaimReview } from "./ClaimReview";
 import { ChangeReview } from "./ChangeReview";
+import { AirlineReview } from "./AirlineReview";
 
 export const metadata = { title: "Review queue — ONE4FIVE" };
 export const dynamic = "force-dynamic";
@@ -27,9 +29,10 @@ export default async function AdminPage() {
     throw err;
   }
 
-  const [claims, changes] = await Promise.all([
+  const [claims, changes, airlineRegistrations] = await Promise.all([
     getPendingClaims(),
     getPendingChangeRequests(),
+    getPendingAirlineRegistrations(),
   ]);
 
   return (
@@ -37,7 +40,9 @@ export default async function AdminPage() {
       <div>
         <h1 className="text-lg font-normal tracking-wide2 text-white">Review queue</h1>
         <p className="mt-1 text-sm text-white/45">
-          {claims.length} claim{claims.length === 1 ? "" : "s"} and{" "}
+          {claims.length} claim{claims.length === 1 ? "" : "s"},{" "}
+          {airlineRegistrations.length} airline registration
+          {airlineRegistrations.length === 1 ? "" : "s"} and{" "}
           {changes.length} change request{changes.length === 1 ? "" : "s"}{" "}
           waiting.
         </p>
@@ -56,6 +61,25 @@ export default async function AdminPage() {
             {claims.map((c) => (
               <li key={c.id}>
                 <ClaimReview claim={c} currentAdminId={admin.id} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-[10px] uppercase tracking-wide2 text-white/35">
+          Airline registrations
+        </h2>
+        {airlineRegistrations.length === 0 ? (
+          <p className="rounded-[2px] border border-dashed border-white/10 p-6 text-center text-sm text-white/35">
+            Nothing to review.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {airlineRegistrations.map((r) => (
+              <li key={r.id}>
+                <AirlineReview registration={r} currentAdminId={admin.id} />
               </li>
             ))}
           </ul>

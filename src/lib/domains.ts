@@ -168,6 +168,27 @@ const MULTIPART_SUFFIXES = new Set([
 ]);
 
 /**
+ * Exact-match variant used by airline registration.
+ *
+ * The airline brief asks for a stricter test than the organisation claim flow:
+ * an account auto-verifies only when its e-mail domain is *exactly* the airline's
+ * website domain — `ops@ryanair.com` against `ryanair.com`, not a sub-domain of
+ * it. Both sides are normalised (scheme, path and a leading `www.` stripped,
+ * lower-cased); a free-mail address never matches, since a website is never a
+ * free-mail domain anyway but the guard makes the intent explicit.
+ */
+export function exactDomainMatchesWebsite(
+  emailHost: string | null,
+  website: string | null | undefined,
+): boolean {
+  if (!emailHost) return false;
+  const email = emailHost.replace(/^www\./, "").trim().toLowerCase();
+  if (!email || isFreeMailDomain(email)) return false;
+  const site = websiteDomain(website);
+  return site !== null && email === site;
+}
+
+/**
  * The domains a claim on this organisation may auto-verify against: its own
  * website plus any corporate domain already on file in the scraped contacts.
  */

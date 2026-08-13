@@ -5,6 +5,18 @@ across Europe**. Airlines and operators click an airport (or search) and get
 cards with each organisation's approvals per authority, certified scope and
 contacts. Data comes from the Supabase DB populated by the `data_scraper` repo.
 
+**Access — the sign-in wall.** The map is the product, so it sits behind
+registration: an unauthenticated request to `/` renders the landing
+(`src/components/Landing.tsx`) instead of the map, routing the two audiences to
+their own sign-up — airlines/operators to `/airline/register`, Part-145
+organisations to `/signup` (which leads into the claim flow). The map's own data
+endpoints enforce the same wall via `hasValidSession` (`/api/search`,
+`/api/airports/[id]` → 401 when signed out, and `private`-cached so a shared CDN
+can't serve them on), while the airline type-ahead (`/api/airline/search`) stays
+public because registration needs it. Consequence: crawlers and signed-out
+visitors see the landing, not the map — the "SSR ships all markers" note below
+only applies to signed-in requests.
+
 ## Stack
 
 - **Next.js 14** (App Router) + TypeScript + Tailwind

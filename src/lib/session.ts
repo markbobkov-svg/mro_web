@@ -94,6 +94,36 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return hydrate(authUser);
 }
 
+/**
+ * Whether the request carries a valid session — validates the token but skips
+ * the app_users hydrate, so it is cheap enough to guard a data API hit on every
+ * keystroke. Returns false when signed out or the token no longer verifies.
+ */
+export async function hasValidSession(): Promise<boolean> {
+  const jar = cookies();
+  const access = jar.get(ACCESS_COOKIE)?.value;
+  const refresh = jar.get(REFRESH_COOKIE)?.value;
+  if (!access && !refresh) return false;
+
+  if (access) {
+    try {
+      const user = await getUserByToken(access);
+      if (user?.id) return true;
+    } catch {
+      // fall through to the refresh token
+    }
+  }
+  if (refresh) {
+    try {
+      const { user } = await refreshSession(refresh);
+      return Boolean(user?.id);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 /** Join the auth user with their public.app_users profile row. */
 async function hydrate(authUser: AuthUser): Promise<CurrentUser> {
   const supabase = getAdminSupabase();

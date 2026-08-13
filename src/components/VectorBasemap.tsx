@@ -1,14 +1,17 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import type { AirportMarker } from "@/lib/types";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   BasemapHandle,
   BasemapProps,
   createMarkerElement,
+  pickLabels,
   zoomScale,
   panelOffsetPx,
   COVERAGE_BBOX,
+  LABEL_MIN_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
 } from "@/lib/basemap";
@@ -98,6 +101,12 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
     const markerObjs = useRef<any[]>([]);
     const readyRef = useRef(false);
     const rebuildRef = useRef<() => void>(() => {});
+    // Markers sorted busiest-first, so the same airports keep their codes as you
+    // pan (no flicker). Recomputed only when the dataset changes.
+    const orderedRef = useRef<AirportMarker[]>([]);
+    // Recomputes which codes are visible, rAF-throttled — exposed so the active
+    // and dataset effects can nudge it without reaching into the init closure.
+    const scheduleLabelsRef = useRef<() => void>(() => {});
 
     // keep the latest props readable from stable closures
     const markersRef = useRef(markers);
@@ -149,8 +158,62 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
           markerObjs.current.push(obj);
           markerEls.current.set(mk.id, el);
         }
+        orderedRef.current = [...markersRef.current].sort(
+          (a, b) => b.orgCount - a.orgCount,
+        );
+        scheduleLabelsRef.current();
       };
       rebuildRef.current = rebuildMarkers;
+
+      // Reveal each dot's code once the map is zoomed in past LABEL_MIN_ZOOM,
+      // choosing the set that fits without overlapping (pickLabels). The selected
+      // airport goes first so its code always shows.
+      let labelsOn = false;
+      const updateLabels = () => {
+        const m = mapRef.current;
+        if (!m) return;
+        const els = markerEls.current;
+        if (m.getZoom() < LABEL_MIN_ZOOM) {
+          if (labelsOn) {
+            els.forEach((el) => el.classList.remove("marker--label"));
+            labelsOn = false;
+          }
+          return;
+        }
+        labelsOn = true;
+        const active = activeIdRef.current;
+        const base = orderedRef.current;
+        const ordered =
+          active && els.has(active)
+            ? [
+                ...base.filter((mk) => mk.id === active),
+                ...base.filter((mk) => mk.id !== active),
+              ]
+            : base;
+        const c = m.getContainer();
+        const shown = pickLabels(
+          ordered,
+          (coords) => {
+            const pt = m.project(coords);
+            return pt ? { x: pt.x, y: pt.y } : null;
+          },
+          { width: c.clientWidth, height: c.clientHeight },
+        );
+        els.forEach((el, id) =>
+          el.classList.toggle("marker--label", shown.has(id)),
+        );
+      };
+
+      // Coalesce the burst of move/zoom events into one recompute per frame.
+      let labelRaf = 0;
+      const scheduleLabels = () => {
+        if (labelRaf) return;
+        labelRaf = requestAnimationFrame(() => {
+          labelRaf = 0;
+          updateLabels();
+        });
+      };
+      scheduleLabelsRef.current = scheduleLabels;
 
       (async () => {
         let libs: Libs;
@@ -231,6 +294,9 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
           );
         applyScale();
         map.on("zoom", applyScale);
+        // `move` fires for both pan and zoom, so one listener keeps the codes in
+        // step with either gesture.
+        map.on("move", scheduleLabels);
         map.on("error", () => {});
         map.on("load", () => {
           if (cancelled) return;
@@ -242,6 +308,7 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
 
       return () => {
         cancelled = true;
+        if (labelRaf) cancelAnimationFrame(labelRaf);
         if (map) map.remove();
         mapRef.current = null;
         readyRef.current = false;
@@ -254,11 +321,13 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
       if (readyRef.current) rebuildRef.current();
     }, [markers]);
 
-    // reflect the active airport without rebuilding
+    // reflect the active airport without rebuilding, and re-run the label pass so
+    // the newly selected airport's code is forced to the front
     useEffect(() => {
       markerEls.current.forEach((el, id) =>
         el.classList.toggle("marker--active", id === activeId),
       );
+      scheduleLabelsRef.current();
     }, [activeId]);
 
     // Outer div owns the absolute full-screen box; the inner (map) div fills it

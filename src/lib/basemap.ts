@@ -30,8 +30,33 @@ export function hasWebGL(): boolean {
   }
 }
 
-const MARKER_HTML =
+// The dot (with its pulse) is always drawn. The code label beside it ships in
+// the markup but stays hidden (opacity 0) until an engine adds `marker--label`,
+// which it does once the map is zoomed in far enough that the dots have spread
+// apart and the code has room to sit without hitting a neighbour — see
+// LABEL_MIN_ZOOM and pickLabels below.
+const MARKER_DOT =
   '<span class="marker__scale"><span class="marker__pulse"></span><span class="marker__dot"></span></span>';
+
+/** Minimal HTML-escape so a stray character in a code can't break the markup. */
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) =>
+      (({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }) as Record<string, string>)[c],
+  );
+}
+
+/** The airport's short code — IATA where it has one, else ICAO (may be empty). */
+export function markerCode(m: AirportMarker): string {
+  return m.iata ?? m.icao ?? "";
+}
 
 /** The class / inner-HTML / tooltip for a glowing pin — shared by both engines. */
 export function markerParts(m: AirportMarker): {
@@ -39,10 +64,13 @@ export function markerParts(m: AirportMarker): {
   html: string;
   title: string;
 } {
-  const code = m.iata ?? m.icao ?? "";
+  const code = markerCode(m);
+  const label = code
+    ? `<span class="marker__label">${escapeHtml(code)}</span>`
+    : "";
   return {
     className: "marker" + (m.orgCount >= 5 ? " marker--lg" : ""),
-    html: MARKER_HTML,
+    html: MARKER_DOT + label,
     title: `${code ? code + " — " : ""}${m.name}${
       m.city ? ", " + m.city : ""
     } · ${m.orgCount} MRO`,
@@ -66,6 +94,71 @@ export function createMarkerElement(m: AirportMarker): HTMLElement {
  */
 export function zoomScale(zoom: number): number {
   return Math.max(0.4, Math.min(1, 1 - (7 - zoom) * 0.13));
+}
+
+/**
+ * Below this zoom most of Europe is on screen and the dots pile on top of one
+ * another, so no codes are drawn. At or above it the engines run pickLabels()
+ * to reveal as many codes as fit without overlapping. Dots reach full size at
+ * zoom 7 (see zoomScale), which is also about where neighbours separate — so
+ * that is where the codes begin to appear.
+ */
+export const LABEL_MIN_ZOOM = 7;
+
+/**
+ * Greedy label placement in screen space. Markers are walked in the order given
+ * (the caller sorts them busiest-first and puts the selected airport at the very
+ * front, so its code always wins) and a code is kept only when its label box
+ * clears every code already placed — so no two labels ever overlap. The dot is
+ * always drawn; only the text is gated. This is what stops the codes conflicting
+ * as the dots crowd together.
+ *
+ * project() is supplied by the caller because the pixel projection differs per
+ * engine (MapLibre map.project vs Leaflet latLngToContainerPoint); the viewport
+ * size lets off-screen markers be skipped cheaply.
+ *
+ * @returns the ids whose label should be visible.
+ */
+export function pickLabels(
+  ordered: AirportMarker[],
+  project: (coordinates: [number, number]) => { x: number; y: number } | null,
+  viewport: { width: number; height: number },
+): Set<string> {
+  const shown = new Set<string>();
+  // label boxes already placed, as [x1, y1, x2, y2] in screen px
+  const boxes: Array<[number, number, number, number]> = [];
+  // a little slack past the edges keeps labels from popping in late while panning
+  const margin = 32;
+
+  const hits = (b: [number, number, number, number]) =>
+    boxes.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+
+  for (const m of ordered) {
+    const code = markerCode(m);
+    if (!code) continue;
+    const p = project(m.coordinates);
+    if (!p) continue;
+    if (
+      p.x < -margin ||
+      p.x > viewport.width + margin ||
+      p.y < -margin ||
+      p.y > viewport.height + margin
+    ) {
+      continue; // off-screen — don't spend a slot on a label nobody can see
+    }
+    // The label sits just right of the dot; approximate its box. Monospace makes
+    // the width predictable (~6.5px per char at the label's size) plus padding.
+    const w = code.length * 6.5 + 8;
+    const h = 15;
+    const x1 = p.x + 10; // dot half-width + gap to the text
+    const y1 = p.y - h / 2;
+    const box: [number, number, number, number] = [x1, y1, x1 + w, y1 + h];
+    if (!hits(box)) {
+      shown.add(m.id);
+      boxes.push(box);
+    }
+  }
+  return shown;
 }
 
 // How far (px) to shift the focused airport left of centre so it sits in the

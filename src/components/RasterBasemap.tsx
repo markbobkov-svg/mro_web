@@ -7,14 +7,17 @@ import {
   useRef,
   useState,
 } from "react";
+import type { AirportMarker } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
 import {
   BasemapHandle,
   BasemapProps,
   markerParts,
+  pickLabels,
   zoomScale,
   panelOffsetPx,
   COVERAGE_BBOX,
+  LABEL_MIN_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
 } from "@/lib/basemap";
@@ -41,6 +44,12 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
     const LRef = useRef<any>(null);
     const markerObjs = useRef<Map<string, any>>(new Map());
     const [ready, setReady] = useState(false);
+    // Busiest-first order for stable label priority; the current active id read
+    // from a ref so the label pass (a stable init-time closure) sees the latest.
+    const orderedRef = useRef<AirportMarker[]>([]);
+    const activeIdRef = useRef<string | null>(activeId);
+    activeIdRef.current = activeId;
+    const scheduleLabelsRef = useRef<() => void>(() => {});
 
     useImperativeHandle(ref, () => ({
       flyTo: (m) => {
@@ -63,6 +72,7 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
     useEffect(() => {
       let cancelled = false;
       let map: any;
+      let labelRaf = 0;
       (async () => {
         const L = (await import("leaflet")).default;
         LRef.current = L;
@@ -107,6 +117,59 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
         map.on("zoom", applyScale);
         map.on("zoomend", applyScale);
 
+        // Reveal each dot's code once zoomed in past LABEL_MIN_ZOOM, picking the
+        // set that fits without overlapping. Selected airport goes first so its
+        // code always shows.
+        let labelsOn = false;
+        const updateLabels = () => {
+          const mp = mapRef.current;
+          if (!mp) return;
+          const els = markerObjs.current;
+          if (mp.getZoom() < LABEL_MIN_ZOOM) {
+            if (labelsOn) {
+              els.forEach((mk) =>
+                mk.getElement?.()?.classList.remove("marker--label"),
+              );
+              labelsOn = false;
+            }
+            return;
+          }
+          labelsOn = true;
+          const active = activeIdRef.current;
+          const b = orderedRef.current;
+          const ordered =
+            active && els.has(active)
+              ? [
+                  ...b.filter((mk) => mk.id === active),
+                  ...b.filter((mk) => mk.id !== active),
+                ]
+              : b;
+          const size = mp.getSize();
+          const shown = pickLabels(
+            ordered,
+            ([lng, lat]) => {
+              const pt = mp.latLngToContainerPoint([lat, lng]);
+              return pt ? { x: pt.x, y: pt.y } : null;
+            },
+            { width: size.x, height: size.y },
+          );
+          els.forEach((mk, id) => {
+            const el = mk.getElement?.();
+            if (el) el.classList.toggle("marker--label", shown.has(id));
+          });
+        };
+        // Coalesce the burst of move/zoom events into one recompute per frame.
+        const scheduleLabels = () => {
+          if (labelRaf) return;
+          labelRaf = requestAnimationFrame(() => {
+            labelRaf = 0;
+            updateLabels();
+          });
+        };
+        scheduleLabelsRef.current = scheduleLabels;
+        map.on("move", scheduleLabels);
+        map.on("zoom", scheduleLabels);
+
         setTimeout(() => {
           if (!cancelled && mapRef.current) mapRef.current.invalidateSize();
         }, 0);
@@ -114,6 +177,7 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
       })();
       return () => {
         cancelled = true;
+        if (labelRaf) cancelAnimationFrame(labelRaf);
         if (map) map.remove();
         mapRef.current = null;
       };
@@ -140,14 +204,18 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
         marker.addTo(map);
         markerObjs.current.set(m.id, marker);
       }
+      orderedRef.current = [...markers].sort((a, b) => b.orgCount - a.orgCount);
+      scheduleLabelsRef.current();
     }, [ready, markers, onSelect]);
 
-    // reflect the active airport
+    // reflect the active airport, and re-run the label pass so the newly selected
+    // airport's code is forced to the front
     useEffect(() => {
       markerObjs.current.forEach((mk, id) => {
         const el = mk.getElement?.();
         if (el) el.classList.toggle("marker--active", id === activeId);
       });
+      scheduleLabelsRef.current();
     }, [activeId]);
 
     return (

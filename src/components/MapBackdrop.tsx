@@ -24,7 +24,9 @@ export default function MapBackdrop() {
 
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 origin-center scale-[1.08] blur-[4px]">
+      {/* Protomaps "black" is near-black; brighten it so the map actually reads
+          as a backdrop, and keep the blur light enough that coastlines show. */}
+      <div className="absolute inset-0 origin-center scale-[1.06] blur-[3px] brightness-[1.7] contrast-[1.08]">
         <VectorBasemap
           markers={[]}
           activeId={null}

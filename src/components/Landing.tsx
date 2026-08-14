@@ -31,7 +31,10 @@ export function Landing({
 
       <div className="relative z-10 mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center px-5 py-16">
         {/* Brand */}
-        <div className="text-center">
+        <div
+          className="text-center"
+          style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
+        >
           <span className="block text-2xl font-normal tracking-brand text-white">
             ONE<span className="text-accent-bright">4</span>FIVE
           </span>
@@ -41,7 +44,10 @@ export function Landing({
         </div>
 
         {/* Hero */}
-        <div className="mt-12 text-center">
+        <div
+          className="mt-12 text-center"
+          style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
+        >
           <h1 className="mx-auto max-w-2xl text-balance text-3xl font-light leading-tight tracking-wide2 text-white sm:text-[2.6rem]">
             Europe&rsquo;s Part-145 maintenance network, on one map.
           </h1>
@@ -208,9 +214,9 @@ function Scrim() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0.62)_58%,rgba(0,0,0,0.86)_100%)]"
+      className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_44%,rgba(0,0,0,0.16)_0%,rgba(0,0,0,0.40)_60%,rgba(0,0,0,0.66)_100%)]"
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-black/75" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/45" />
     </div>
   );
 }

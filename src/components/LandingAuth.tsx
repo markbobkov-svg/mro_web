@@ -7,7 +7,7 @@ import { useFormState } from "react-dom";
 import { signInAction, type FormState } from "@/app/(account)/actions";
 import { RegisterForm } from "@/app/airline/register/RegisterForm";
 import { SignupForm } from "@/app/(account)/signup/SignupForm";
-import { Alert, Field, Input, SubmitButton } from "@/components/ui/Form";
+import { Alert, SubmitButton } from "@/components/ui/Form";
 
 /**
  * The landing's auth area. It opens on sign-in — an e-mail field, with the
@@ -58,76 +58,76 @@ function LoginPanel({ onRegister }: { onRegister: () => void }) {
   const [email, setEmail] = useState("");
   const [emailBlurred, setEmailBlurred] = useState(false);
 
-  // Reveal the password once an e-mail has been entered: as soon as it looks
-  // like an address, or when the field is left with anything in it.
+  // Reveal the password once an e-mail has been entered.
   const reveal =
     /^\S+@\S+/.test(email.trim()) || (emailBlurred && email.trim().length > 0);
 
+  // No card: frosted-glass fields that sit straight on the map, so the sign-in
+  // reads as part of the page rather than a boxed widget over it.
+  const field =
+    "w-full rounded-[2px] border border-white/15 bg-white/[0.06] px-4 py-3 text-sm " +
+    "text-white placeholder:text-white/40 outline-none backdrop-blur-md transition " +
+    "focus:border-accent/60 focus:bg-white/[0.10]";
+
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="rounded-[2px] border border-white/10 bg-[#141414]/70 p-6 backdrop-blur-md">
-        <h2 className="text-sm font-medium tracking-wide2 text-white">Sign in</h2>
-        <p className="mt-1 text-sm text-white/45">
-          Open the map and your dashboard.
-        </p>
+    <div className="mx-auto w-full max-w-sm">
+      {state.error ? (
+        <div className="mb-3">
+          <Alert kind="error">{state.error}</Alert>
+        </div>
+      ) : null}
 
-        {state.error ? (
-          <div className="mt-4">
-            <Alert kind="error">{state.error}</Alert>
-          </div>
-        ) : null}
+      <form action={action} className="space-y-3">
+        <input type="hidden" name="next" value="/" />
 
-        <form action={action} className="mt-5 space-y-4">
-          <input type="hidden" name="next" value="/" />
+        <input
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => setEmailBlurred(true)}
+          placeholder="Work e-mail"
+          aria-label="Work e-mail"
+          className={field}
+        />
 
-          <Field label="Work e-mail">
-            <Input
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={() => setEmailBlurred(true)}
-              placeholder="you@your-company.com"
-            />
-          </Field>
-
-          {/* Password drops down once an e-mail is entered (grid-rows 0fr→1fr
-              gives a real height animation; the inner div clips it meanwhile). */}
-          <div
-            className={`grid transition-all duration-300 ease-out ${
-              reveal ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="space-y-4">
-                <Field label="Password">
-                  <Input
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required={reveal}
-                  />
-                </Field>
-                <SubmitButton className="w-full" pendingLabel="Signing in…">
-                  Sign in
-                </SubmitButton>
-                <div className="text-right">
-                  <Link
-                    href="/login?next=%2F"
-                    className="text-xs text-white/35 transition hover:text-white/70"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
+        {/* Password drops down once an e-mail is entered (grid-rows 0fr→1fr is a
+            real height animation; the inner div clips it meanwhile). */}
+        <div
+          className={`grid transition-all duration-300 ease-out ${
+            reveal ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-3">
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required={reveal}
+                placeholder="Password"
+                aria-label="Password"
+                className={field}
+              />
+              <SubmitButton className="w-full py-3" pendingLabel="Signing in…">
+                Sign in
+              </SubmitButton>
+              <div className="text-right">
+                <Link
+                  href="/login?next=%2F"
+                  className="text-xs text-white/35 transition hover:text-white/70"
+                >
+                  Forgot password?
+                </Link>
               </div>
             </div>
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
 
-      <p className="mt-3 text-center text-sm text-white/45">
+      <p className="mt-4 text-center text-sm text-white/55">
         Don&rsquo;t have an account yet?{" "}
         <button
           type="button"

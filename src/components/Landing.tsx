@@ -42,7 +42,7 @@ export function Landing({
           </span>
         </div>
 
-        {/* Hero */}
+        {/* Headline — first of the two main texts */}
         <div
           className="mt-12 text-center"
           style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
@@ -50,7 +50,19 @@ export function Landing({
           <h1 className="mx-auto max-w-2xl text-balance text-3xl font-light leading-tight tracking-wide2 text-white sm:text-[2.6rem]">
             Europe&rsquo;s Part-145 maintenance network, on one map.
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-white/55 sm:text-base">
+        </div>
+
+        {/* Sign in sits between the two texts. */}
+        <div className="mt-10">
+          <LandingAuth />
+        </div>
+
+        {/* Description + stat — second of the two main texts */}
+        <div
+          className="mt-10 text-center"
+          style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
+        >
+          <p className="mx-auto max-w-xl text-sm leading-relaxed text-white/55 sm:text-base">
             Search any airport and see which approved organisations work there —
             their approvals per authority, certified scope, and the desk to call
             when an aircraft is on the ground.
@@ -62,11 +74,6 @@ export function Landing({
               Part-145 organisations · across Europe
             </p>
           ) : null}
-        </div>
-
-        {/* The wall: log in, or register (role-first). No audience cards. */}
-        <div className="mt-12">
-          <LandingAuth />
         </div>
 
         <p className="mx-auto mt-14 max-w-md text-center text-[11px] leading-relaxed text-white/25">

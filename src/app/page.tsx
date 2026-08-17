@@ -2,7 +2,7 @@ import MapView from "@/components/MapView";
 import SetupNotice from "@/components/SetupNotice";
 import { Landing } from "@/components/Landing";
 import { hasSupabaseCredentials } from "@/lib/supabase";
-import { getAirportMarkers, getPublicStats } from "@/lib/data";
+import { getAirportMarkers } from "@/lib/data";
 import { getCurrentUser } from "@/lib/session";
 import type { AirportMarker } from "@/lib/types";
 
@@ -16,17 +16,21 @@ export default async function Home() {
   }
 
   // The map is the product; it sits behind a sign-in wall. A signed-out visitor
-  // gets the landing page instead — and none of the ~405 markers, which would
-  // otherwise ship inside the HTML.
+  // gets the landing page instead. It carries airport dot *positions* for the
+  // blurred backdrop and the headline count — coordinates only, no names,
+  // counts or per-organisation details, and the backdrop map is non-interactive.
   const user = await getCurrentUser();
   if (!user) {
+    let dots: [number, number][] = [];
     let organisationCount = 0;
     try {
-      organisationCount = (await getPublicStats()).organisationCount;
+      const data = await getAirportMarkers();
+      dots = data.markers.map((m) => m.coordinates);
+      organisationCount = data.organisationCount;
     } catch {
-      // A stat is nice-to-have; never let it keep the front door from opening.
+      // Dots and the count are nice-to-have; never block the front door.
     }
-    return <Landing organisationCount={organisationCount} />;
+    return <Landing organisationCount={organisationCount} dots={dots} />;
   }
 
   let markers: AirportMarker[] = [];

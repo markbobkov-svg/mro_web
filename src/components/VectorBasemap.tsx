@@ -94,7 +94,15 @@ function loadLibs(): Promise<Libs> {
 
 const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
   function VectorBasemap(
-    { markers, activeId, onSelect, onFail, interactive = true, controls = true },
+    {
+      markers,
+      activeId,
+      onSelect,
+      onFail,
+      interactive = true,
+      controls = true,
+      dots,
+    },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -114,6 +122,8 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
     // keep the latest props readable from stable closures
     const markersRef = useRef(markers);
     markersRef.current = markers;
+    const dotsRef = useRef(dots);
+    dotsRef.current = dots;
     const activeIdRef = useRef<string | null>(activeId);
     activeIdRef.current = activeId;
     const onSelectRef = useRef(onSelect);
@@ -312,6 +322,45 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
           map.resize();
           readyRef.current = true;
           rebuildMarkers();
+
+          // Decorative airport dots for the signed-out backdrop: a cheap GL
+          // circle layer (soft glow + bright core) rather than DOM markers, so
+          // it stays smooth and blurs with the canvas. Coordinates only.
+          const d = dotsRef.current;
+          if (d && d.length && !map.getSource("o4f-dots")) {
+            map.addSource("o4f-dots", {
+              type: "geojson",
+              data: {
+                type: "FeatureCollection",
+                features: d.map((c) => ({
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: c },
+                  properties: {},
+                })),
+              },
+            });
+            map.addLayer({
+              id: "o4f-dots-glow",
+              type: "circle",
+              source: "o4f-dots",
+              paint: {
+                "circle-radius": 6,
+                "circle-color": "#7fa9ff",
+                "circle-blur": 1,
+                "circle-opacity": 0.4,
+              },
+            });
+            map.addLayer({
+              id: "o4f-dots-core",
+              type: "circle",
+              source: "o4f-dots",
+              paint: {
+                "circle-radius": 2.4,
+                "circle-color": "#e6eefc",
+                "circle-opacity": 0.85,
+              },
+            });
+          }
         });
       })();
 

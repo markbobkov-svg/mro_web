@@ -19,18 +19,6 @@ function uniq<T>(arr: T[]): T[] {
 }
 
 /**
- * Cheap headline numbers for the signed-out landing page. Just a count — no
- * organisation rows leave the server for a visitor who has not signed in.
- */
-export async function getPublicStats(): Promise<{ organisationCount: number }> {
-  const supabase = getSupabase();
-  const { count } = await supabase
-    .from("organisations")
-    .select("id", { count: "exact", head: true });
-  return { organisationCount: count ?? 0 };
-}
-
-/**
  * Every airport that has at least one MRO station, with resolved coordinates
  * and a count of distinct organisations — the map pins — plus the distinct
  * organisation total across all of them (an organisation at several airports is

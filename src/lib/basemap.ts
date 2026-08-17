@@ -19,6 +19,10 @@ export interface BasemapProps {
   /** Show the zoom + attribution controls. Defaults to true; the landing turns
    *  them off (they would be blurred) and prints its own sharp credit. */
   controls?: boolean;
+  /** Decorative airport dots for the signed-out backdrop, as [lng, lat] pairs —
+   *  coordinates only, no names/counts/ids. Rendered as a cheap GL circle layer
+   *  (not DOM markers), so they blur with the canvas and never carry data. */
+  dots?: [number, number][];
 }
 
 /** True if the browser can create a WebGL context (needed for the vector map). */

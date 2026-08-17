@@ -13,9 +13,11 @@ organisations to `/signup` (which leads into the claim flow). The map's own data
 endpoints enforce the same wall via `hasValidSession` (`/api/search`,
 `/api/airports/[id]` → 401 when signed out, and `private`-cached so a shared CDN
 can't serve them on), while the airline type-ahead (`/api/airline/search`) stays
-public because registration needs it. Consequence: crawlers and signed-out
-visitors see the landing, not the map — the "SSR ships all markers" note below
-only applies to signed-in requests.
+public because registration needs it. The landing's backdrop is the blurred
+basemap with the airport dot *positions* (coordinates only — no names, counts or
+organisation details, rendered as a GL circle layer); the full markers and every
+per-organisation detail stay behind the wall. So the "SSR ships all markers" note
+below applies only to signed-in requests.
 
 ## Stack
 

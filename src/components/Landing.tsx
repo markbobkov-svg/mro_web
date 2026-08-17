@@ -9,20 +9,24 @@ import LandingContent from "./LandingContent";
  * backdrop is our own map, blurred behind frosted glass (MapBackdrop), over a
  * static field that shows while it loads or if WebGL is missing.
  *
- * The backdrop is deliberately markerless — no organisation data reaches a
- * signed-out visitor, the whole point of the wall — and non-interactive. The
- * content column (brand, sign-in, register) is `LandingContent`, a client
- * component so the surrounding text can collapse when a registration form opens.
+ * The backdrop shows the airport dot *positions* (coordinates only — no names,
+ * counts or per-organisation details) and is non-interactive, so the wall still
+ * holds: the data an operator signs in for stays server-side. The content column
+ * (brand, sign-in, register) is `LandingContent`, a client component so the
+ * surrounding text can collapse when a registration form opens.
  */
 export function Landing({
   organisationCount = 0,
+  dots = [],
 }: {
   organisationCount?: number;
+  /** Airport dot coordinates for the blurred backdrop (positions only). */
+  dots?: [number, number][];
 }) {
   return (
     <main className="relative h-viewport w-full overflow-y-auto overflow-x-hidden scroll-thin bg-black">
       <BaseField />
-      <MapBackdrop />
+      <MapBackdrop dots={dots} />
       <Scrim />
       <LandingContent organisationCount={organisationCount} />
     </main>

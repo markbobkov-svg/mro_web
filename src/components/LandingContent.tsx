@@ -161,6 +161,14 @@ function LoginPanel({ onRegister }: { onRegister: () => void }) {
 
   return (
     <div className="mx-auto w-full max-w-sm">
+      {/* A plain heading so the card-less field still reads as a sign-in. */}
+      <h2
+        className="mb-4 text-center text-base font-normal tracking-wide2 text-white"
+        style={SHADOW}
+      >
+        Sign in
+      </h2>
+
       {state.error ? (
         <div className="mb-3">
           <Alert kind="error">{state.error}</Alert>

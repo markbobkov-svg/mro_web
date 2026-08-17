@@ -240,7 +240,9 @@ function RolePicker({
 }) {
   return (
     <div className="mx-auto w-full max-w-md">
-      <div className="rounded-[2px] border border-white/10 bg-[#141414]/70 p-6 backdrop-blur-md">
+      {/* Same panel treatment as the registration forms below it
+          (RegisterForm / SignupForm): bg-[#141414]/60, no backdrop-blur. */}
+      <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium tracking-wide2 text-white">
             Create an account

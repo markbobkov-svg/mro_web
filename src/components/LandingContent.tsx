@@ -10,45 +10,135 @@ import { SignupForm } from "@/app/(account)/signup/SignupForm";
 import { Alert, SubmitButton } from "@/components/ui/Form";
 
 /**
- * The landing's auth area. It opens on sign-in — an e-mail field, with the
- * password dropping in once an address is entered — because most visits are
- * returning users. "Register" switches to the role-first sign-up (pick who you
- * are, then the matching form loads); those forms are the same ones served at
- * /airline/register and /signup, reused here so there is one path in.
+ * The signed-out landing's content column: the brand, the sign-in, and the two
+ * marketing texts around it.
+ *
+ * Opening registration (the role picker, or a form) hides the headline, the
+ * description and the footer blurb so the taller form centres in the viewport —
+ * only the brand and the required OpenStreetMap credit stay. Owning the auth
+ * mode here, rather than in a child, is what lets those texts react to it.
+ *
+ * Sign-in leads (most visits are returning users); "Register" switches to the
+ * role-first sign-up, whose two forms are the same ones served at
+ * /airline/register and /signup, reused so there is one path in.
  */
-const EMPTY: FormState = {};
 type Role = "airline" | "org";
+const EMPTY: FormState = {};
+const SHADOW = {
+  textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)",
+};
 
-export default function LandingAuth() {
+export default function LandingContent({
+  organisationCount = 0,
+}: {
+  organisationCount?: number;
+}) {
   const [mode, setMode] = useState<"login" | "role" | "form">("login");
   const [role, setRole] = useState<Role | null>(null);
-
-  if (mode === "login") {
-    return <LoginPanel onRegister={() => setMode("role")} />;
-  }
-
-  if (mode === "role") {
-    return (
-      <RolePicker
-        onPick={(r) => {
-          setRole(r);
-          setMode("form");
-        }}
-        onCancel={() => setMode("login")}
-      />
-    );
-  }
+  const count = organisationCount > 0 ? organisationCount : null;
+  const isLogin = mode === "login";
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <button
-        type="button"
-        onClick={() => setMode("role")}
-        className="mb-3 text-xs text-white/45 transition hover:text-white/80"
+    <div className="relative z-10 mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center px-5 py-16">
+      {/* Brand */}
+      <div className="text-center" style={SHADOW}>
+        <span className="block text-2xl font-normal tracking-brand text-white">
+          ONE<span className="text-accent-bright">4</span>FIVE
+        </span>
+        <span className="mt-2 block text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
+          Part-145 · MRO · Europe
+        </span>
+      </div>
+
+      {/* Headline — hidden while registering so the form can centre */}
+      {isLogin ? (
+        <div className="mt-12 text-center" style={SHADOW}>
+          <h1 className="mx-auto max-w-2xl text-balance text-3xl font-light leading-tight tracking-wide2 text-white sm:text-[2.6rem]">
+            Europe&rsquo;s Part-145 maintenance network, on one map.
+          </h1>
+        </div>
+      ) : null}
+
+      {/* Sign in — sits between the two texts; the whole reason to be here. */}
+      <div className="mt-10">
+        {mode === "login" ? (
+          <LoginPanel onRegister={() => setMode("role")} />
+        ) : mode === "role" ? (
+          <RolePicker
+            onPick={(r) => {
+              setRole(r);
+              setMode("form");
+            }}
+            onCancel={() => setMode("login")}
+          />
+        ) : (
+          <div className="mx-auto w-full max-w-md">
+            <button
+              type="button"
+              onClick={() => setMode("role")}
+              className="mb-3 text-xs text-white/45 transition hover:text-white/80"
+            >
+              ← Choose a different role
+            </button>
+            {role === "airline" ? <RegisterForm /> : <SignupForm />}
+          </div>
+        )}
+      </div>
+
+      {/* Description + stat — hidden while registering */}
+      {isLogin ? (
+        <div className="mt-10 text-center" style={SHADOW}>
+          <p className="mx-auto max-w-xl text-sm leading-relaxed text-white/55 sm:text-base">
+            Search any airport and see which approved organisations work there —
+            their approvals per authority, certified scope, and the desk to call
+            when an aircraft is on the ground.
+          </p>
+          {count ? (
+            <p className="mt-6 text-xs uppercase tracking-wide2 text-white/40">
+              <span className="text-white/70">
+                {count.toLocaleString("en-GB")}
+              </span>{" "}
+              Part-145 organisations · across Europe
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Footer blurb — hidden while registering */}
+      {isLogin ? (
+        <p className="mx-auto mt-14 max-w-md text-center text-[11px] leading-relaxed text-white/25">
+          Data compiled from EASA and national aviation-authority registers.
+          Access is free — an account keeps the map and the organisation data it
+          holds for the industry it serves.
+        </p>
+      ) : null}
+
+      {/* Basemap credit — always on while the map is shown (ODbL). */}
+      <p
+        className={`mx-auto max-w-md text-center text-[11px] leading-relaxed text-white/20 ${
+          isLogin ? "mt-3" : "mt-12"
+        }`}
       >
-        ← Choose a different role
-      </button>
-      {role === "airline" ? <RegisterForm /> : <SignupForm />}
+        Basemap ©{" "}
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+          className="underline-offset-2 transition hover:text-white/40 hover:underline"
+        >
+          OpenStreetMap
+        </a>{" "}
+        contributors, rendered with{" "}
+        <a
+          href="https://protomaps.com"
+          target="_blank"
+          rel="noreferrer"
+          className="underline-offset-2 transition hover:text-white/40 hover:underline"
+        >
+          Protomaps
+        </a>
+        .
+      </p>
     </div>
   );
 }

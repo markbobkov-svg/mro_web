@@ -1,5 +1,5 @@
 import MapBackdrop from "./MapBackdrop";
-import LandingAuth from "./LandingAuth";
+import LandingContent from "./LandingContent";
 
 /**
  * The front door for signed-out visitors.
@@ -7,102 +7,24 @@ import LandingAuth from "./LandingAuth";
  * The map is the product, so it sits behind a sign-in wall: this page is what an
  * unauthenticated request to `/` renders instead (see src/app/page.tsx). The
  * backdrop is our own map, blurred behind frosted glass (MapBackdrop), over a
- * static field that shows while it loads or if WebGL is missing. It routes the
- * two audiences to their own sign-up: airlines/operators to the airline
- * registration, Part-145 organisations to the account sign-up that leads into
- * the claim flow.
+ * static field that shows while it loads or if WebGL is missing.
  *
- * The map backdrop is deliberately markerless — no organisation data reaches a
- * signed-out visitor, the whole point of the wall — and non-interactive.
+ * The backdrop is deliberately markerless — no organisation data reaches a
+ * signed-out visitor, the whole point of the wall — and non-interactive. The
+ * content column (brand, sign-in, register) is `LandingContent`, a client
+ * component so the surrounding text can collapse when a registration form opens.
  */
 export function Landing({
   organisationCount = 0,
 }: {
   organisationCount?: number;
 }) {
-  const count = organisationCount > 0 ? organisationCount : null;
-
   return (
     <main className="relative h-viewport w-full overflow-y-auto overflow-x-hidden scroll-thin bg-black">
       <BaseField />
       <MapBackdrop />
       <Scrim />
-
-      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center px-5 py-16">
-        {/* Brand */}
-        <div
-          className="text-center"
-          style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
-        >
-          <span className="block text-2xl font-normal tracking-brand text-white">
-            ONE<span className="text-accent-bright">4</span>FIVE
-          </span>
-          <span className="mt-2 block text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
-            Part-145 · MRO · Europe
-          </span>
-        </div>
-
-        {/* Headline — first of the two main texts */}
-        <div
-          className="mt-12 text-center"
-          style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
-        >
-          <h1 className="mx-auto max-w-2xl text-balance text-3xl font-light leading-tight tracking-wide2 text-white sm:text-[2.6rem]">
-            Europe&rsquo;s Part-145 maintenance network, on one map.
-          </h1>
-        </div>
-
-        {/* Sign in sits between the two texts. */}
-        <div className="mt-10">
-          <LandingAuth />
-        </div>
-
-        {/* Description + stat — second of the two main texts */}
-        <div
-          className="mt-10 text-center"
-          style={{ textShadow: "0 1px 22px rgba(0,0,0,0.62), 0 1px 3px rgba(0,0,0,0.5)" }}
-        >
-          <p className="mx-auto max-w-xl text-sm leading-relaxed text-white/55 sm:text-base">
-            Search any airport and see which approved organisations work there —
-            their approvals per authority, certified scope, and the desk to call
-            when an aircraft is on the ground.
-          </p>
-
-          {count ? (
-            <p className="mt-6 text-xs uppercase tracking-wide2 text-white/40">
-              <span className="text-white/70">{count.toLocaleString("en-GB")}</span>{" "}
-              Part-145 organisations · across Europe
-            </p>
-          ) : null}
-        </div>
-
-        <p className="mx-auto mt-14 max-w-md text-center text-[11px] leading-relaxed text-white/25">
-          Data compiled from EASA and national aviation-authority registers.
-          Access is free — an account keeps the map and the organisation data it
-          holds for the industry it serves.
-        </p>
-        <p className="mx-auto mt-3 max-w-md text-center text-[11px] leading-relaxed text-white/20">
-          Basemap ©{" "}
-          <a
-            href="https://www.openstreetmap.org/copyright"
-            target="_blank"
-            rel="noreferrer"
-            className="underline-offset-2 transition hover:text-white/40 hover:underline"
-          >
-            OpenStreetMap
-          </a>{" "}
-          contributors, rendered with{" "}
-          <a
-            href="https://protomaps.com"
-            target="_blank"
-            rel="noreferrer"
-            className="underline-offset-2 transition hover:text-white/40 hover:underline"
-          >
-            Protomaps
-          </a>
-          .
-        </p>
-      </div>
+      <LandingContent organisationCount={organisationCount} />
     </main>
   );
 }

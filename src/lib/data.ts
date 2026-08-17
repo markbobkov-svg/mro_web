@@ -19,6 +19,21 @@ function uniq<T>(arr: T[]): T[] {
 }
 
 /**
+ * Total Part-145 organisations on file — the headline figure for the signed-out
+ * landing. Deliberately the whole register, not just the ~700 with a mapped
+ * station (most scraped stations have no airport_id, so only a subset become map
+ * pins), so the number reflects real coverage. Just a count; no rows leave the
+ * server for a signed-out visitor.
+ */
+export async function getPublicStats(): Promise<{ organisationCount: number }> {
+  const supabase = getSupabase();
+  const { count } = await supabase
+    .from("organisations")
+    .select("id", { count: "exact", head: true });
+  return { organisationCount: count ?? 0 };
+}
+
+/**
  * Every airport that has at least one MRO station, with resolved coordinates
  * and a count of distinct organisations — the map pins — plus the distinct
  * organisation total across all of them (an organisation at several airports is

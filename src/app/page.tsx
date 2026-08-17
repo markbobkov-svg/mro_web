@@ -2,7 +2,7 @@ import MapView from "@/components/MapView";
 import SetupNotice from "@/components/SetupNotice";
 import { Landing } from "@/components/Landing";
 import { hasSupabaseCredentials } from "@/lib/supabase";
-import { getAirportMarkers } from "@/lib/data";
+import { getAirportMarkers, getPublicStats } from "@/lib/data";
 import { getCurrentUser } from "@/lib/session";
 import type { AirportMarker } from "@/lib/types";
 
@@ -21,12 +21,17 @@ export default async function Home() {
   // counts or per-organisation details, and the backdrop map is non-interactive.
   const user = await getCurrentUser();
   if (!user) {
+    // Dots are the airport positions; the count is the *whole* register (1,600+),
+    // not just the ~700 orgs with a mapped station — see getPublicStats.
     let dots: [number, number][] = [];
     let organisationCount = 0;
     try {
-      const data = await getAirportMarkers();
-      dots = data.markers.map((m) => m.coordinates);
-      organisationCount = data.organisationCount;
+      const [markerData, stats] = await Promise.all([
+        getAirportMarkers(),
+        getPublicStats(),
+      ]);
+      dots = markerData.markers.map((m) => m.coordinates);
+      organisationCount = stats.organisationCount;
     } catch {
       // Dots and the count are nice-to-have; never block the front door.
     }

@@ -64,6 +64,32 @@ export async function getMemberships(userId: string): Promise<Membership[]> {
 }
 
 /**
+ * The organisation ids the map should be scoped to for this viewer, or null for
+ * "no scope — show the whole map".
+ *
+ * A signed-in MRO (a member of one or more organisations) sees only its own
+ * network: the airports where it has a station, and only its own card at each.
+ * Everyone else sees everything — admins are staff rather than an MRO, and
+ * airlines (the audience the map is *for*) and brand-new sign-ups have no
+ * organisation to scope to. The read soft-fails to null (unscoped) the same way
+ * the airline reads do, so a transient error never leaves an organisation
+ * staring at a blank map — signed-in users could always see the whole map before
+ * this scoping existed, so failing open is no regression.
+ */
+export async function getViewerOrgScope(
+  user: CurrentUser,
+): Promise<string[] | null> {
+  if (user.isAdmin) return null;
+  try {
+    const memberships = await getMemberships(user.id);
+    if (memberships.length === 0) return null;
+    return memberships.map((m) => m.organisationId);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Assert that `user` may act for `organisationId`.
  *
  * Throws rather than redirecting so a forged id in a form post fails loudly

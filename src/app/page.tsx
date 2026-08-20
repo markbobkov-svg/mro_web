@@ -4,6 +4,7 @@ import { Landing } from "@/components/Landing";
 import { hasSupabaseCredentials } from "@/lib/supabase";
 import { getAirportMarkers, getPublicStats } from "@/lib/data";
 import { getCurrentUser } from "@/lib/session";
+import { getViewerOrgScope } from "@/lib/guards";
 import type { AirportMarker } from "@/lib/types";
 
 // Always render fresh from the DB (data changes as the scraper runs), and it
@@ -38,11 +39,16 @@ export default async function Home() {
     return <Landing organisationCount={organisationCount} dots={dots} />;
   }
 
+  // A signed-in MRO sees only its own network: the airports where it has a
+  // station, and only its own card there. Everyone else (admins, airlines,
+  // brand-new sign-ups) gets the whole map — see getViewerOrgScope.
+  const orgScope = await getViewerOrgScope(user);
+
   let markers: AirportMarker[] = [];
   let organisationCount = 0;
   let error: string | null = null;
   try {
-    const data = await getAirportMarkers();
+    const data = await getAirportMarkers(orgScope);
     markers = data.markers;
     organisationCount = data.organisationCount;
   } catch (err) {

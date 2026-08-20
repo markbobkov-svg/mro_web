@@ -38,21 +38,30 @@ export async function getPublicStats(): Promise<{ organisationCount: number }> {
  * and a count of distinct organisations — the map pins — plus the distinct
  * organisation total across all of them (an organisation at several airports is
  * one organisation but many stations) for the corner counter.
+ *
+ * When `orgScope` is given (a signed-in MRO viewing its own network), only the
+ * airports where one of those organisations has a station become pins, and each
+ * pin counts only the scoped organisations — so the map shows the organisation
+ * its own stations and nothing else.
  */
-export async function getAirportMarkers(): Promise<{
+export async function getAirportMarkers(orgScope?: string[] | null): Promise<{
   markers: AirportMarker[];
   organisationCount: number;
 }> {
   const supabase = getSupabase();
+  const scope = orgScope && orgScope.length ? orgScope : null;
 
-  // 1. all station → airport links (paginated)
+  // 1. all station → airport links (paginated). Narrowed to the viewer's own
+  // organisations when scoped, so only the airports it staffs come back.
   const airportOrgs = new Map<string, Set<string>>();
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("organisation_stations")
       .select("airport_id, organisation_id")
       .not("airport_id", "is", null)
       .range(from, from + PAGE - 1);
+    if (scope) query = query.in("organisation_id", scope);
+    const { data, error } = await query;
     if (error) throw new Error(`getAirportMarkers(stations): ${error.message}`);
     if (!data || data.length === 0) break;
     for (const row of data as any[]) {
@@ -190,8 +199,19 @@ async function fetchStationScope(supabase: any, stationIds: string[]): Promise<a
  */
 export async function getAirportDetail(
   airportId: string,
+  orgScope?: string[] | null,
 ): Promise<AirportDetail> {
   const supabase = getSupabase();
+  const scope = orgScope && orgScope.length ? orgScope : null;
+
+  // Scoping the stations query scopes the whole card list: every organisation,
+  // approval, scope and contact below is keyed off the stations found here, so a
+  // signed-in MRO only ever sees its own card at the airport.
+  let stationsQuery = supabase
+    .from("organisation_stations")
+    .select("id, address, country_code, phone, email, organisation_id")
+    .eq("airport_id", airportId);
+  if (scope) stationsQuery = stationsQuery.in("organisation_id", scope);
 
   const [{ data: airport, error: aErr }, { data: stations, error: sErr }] =
     await Promise.all([
@@ -200,10 +220,7 @@ export async function getAirportDetail(
         .select("id, iata_code, icao_code, name, city, country_code")
         .eq("id", airportId)
         .maybeSingle(),
-      supabase
-        .from("organisation_stations")
-        .select("id, address, country_code, phone, email, organisation_id")
-        .eq("airport_id", airportId),
+      stationsQuery,
     ]);
   if (aErr) throw new Error(`getAirportDetail(airport): ${aErr.message}`);
   if (sErr) throw new Error(`getAirportDetail(stations): ${sErr.message}`);

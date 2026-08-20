@@ -185,27 +185,42 @@ function getIndex(): Promise<Index> {
 export async function searchAirports(
   query: string,
   limit = 12,
+  orgScope?: string[] | null,
 ): Promise<SearchHit[]> {
   const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return [];
 
   const { airports, orgs } = await getIndex();
+  const scope = orgScope && orgScope.length ? new Set(orgScope) : null;
 
   const orgMatches = (id: string, t: string) => {
     const org = orgs.get(id);
     return !!org && (org.nameText.includes(t) || org.scopeText.includes(t));
   };
 
-  const hits: { doc: AirportDoc; score: number; matchedOrgIds: string[] }[] = [];
+  const hits: {
+    doc: AirportDoc;
+    score: number;
+    matchedOrgIds: string[];
+    visibleOrgIds: string[];
+  }[] = [];
   for (const doc of airports) {
+    // When the viewer is an MRO, only its own presence at each airport is
+    // searchable — competitors sharing the airport stay hidden, and an airport
+    // where it has no station drops out of the results entirely.
+    const visibleOrgIds = scope
+      ? doc.orgIds.filter((id) => scope.has(id))
+      : doc.orgIds;
+    if (visibleOrgIds.length === 0) continue;
+
     const airportTokens = tokens.filter((t) => doc.own.includes(t));
     const orgTokens = tokens.filter((t) => !doc.own.includes(t));
 
     // organisations here that satisfy every token the airport didn't
     const matchedOrgIds =
       orgTokens.length === 0
-        ? doc.orgIds
-        : doc.orgIds.filter((id) => orgTokens.every((t) => orgMatches(id, t)));
+        ? visibleOrgIds
+        : visibleOrgIds.filter((id) => orgTokens.every((t) => orgMatches(id, t)));
     if (matchedOrgIds.length === 0) continue;
 
     let score = airportTokens.length * 10;
@@ -215,14 +230,14 @@ export async function searchAirports(
         score += 100;
       }
     }
-    hits.push({ doc, score, matchedOrgIds });
+    hits.push({ doc, score, matchedOrgIds, visibleOrgIds });
   }
 
   hits.sort(
     (a, b) => b.score - a.score || b.matchedOrgIds.length - a.matchedOrgIds.length,
   );
 
-  return hits.slice(0, limit).map(({ doc, matchedOrgIds }) => {
+  return hits.slice(0, limit).map(({ doc, matchedOrgIds, visibleOrgIds }) => {
     const orgTokens = tokens.filter((t) => !doc.own.includes(t));
     const matchedOrgs: string[] = [];
     const matchedScope: string[] = [];
@@ -253,7 +268,9 @@ export async function searchAirports(
       city: doc.city,
       countryCode: doc.countryCode,
       orgCount: matchedOrgIds.length,
-      totalOrgCount: doc.orgIds.length,
+      // Scoped total, so an MRO never sees "1 of 6" hinting at the competitors
+      // sharing its airport — only its own presence counts.
+      totalOrgCount: visibleOrgIds.length,
       matchedOrgIds: orgTokens.length === 0 ? [] : matchedOrgIds,
       matchedOrgs,
       matchedScope,

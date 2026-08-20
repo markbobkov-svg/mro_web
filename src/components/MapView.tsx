@@ -12,11 +12,19 @@ interface Props {
   /** Distinct organisations across all airports (one org, many stations). */
   organisationCount: number;
   loadError: string | null;
+  /** Frame the markers on load rather than the whole-Europe default — set when
+   *  the signed-in viewer is an MRO seeing only its own stations. */
+  fitToMarkers?: boolean;
 }
 
 type Engine = "vector" | "raster";
 
-export default function MapView({ markers, organisationCount, loadError }: Props) {
+export default function MapView({
+  markers,
+  organisationCount,
+  loadError,
+  fitToMarkers = false,
+}: Props) {
   const basemapRef = useRef<BasemapHandle>(null);
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
   const activeIdRef = useRef<string | null>(null);
@@ -309,6 +317,7 @@ export default function MapView({ markers, organisationCount, loadError }: Props
           activeId={activeId}
           onSelect={selectAirport}
           onFail={onVectorFail}
+          fitMarkers={fitToMarkers}
         />
       )}
       {engine === "raster" && (
@@ -317,6 +326,7 @@ export default function MapView({ markers, organisationCount, loadError }: Props
           markers={markers}
           activeId={activeId}
           onSelect={selectAirport}
+          fitMarkers={fitToMarkers}
         />
       )}
 

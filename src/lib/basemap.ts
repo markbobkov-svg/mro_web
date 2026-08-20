@@ -23,6 +23,10 @@ export interface BasemapProps {
    *  coordinates only, no names/counts/ids. Rendered as a cheap GL circle layer
    *  (not DOM markers), so they blur with the canvas and never carry data. */
   dots?: [number, number][];
+  /** Frame the markers on load instead of the whole-Europe default — used when a
+   *  signed-in MRO sees only its own stations, so it lands zoomed on its region
+   *  rather than staring at all of Europe. Ignored when there are no markers. */
+  fitMarkers?: boolean;
 }
 
 /** True if the browser can create a WebGL context (needed for the vector map). */
@@ -196,3 +200,38 @@ export const COVERAGE_BBOX = {
 export const MAX_ZOOM = 13;
 /** Min zoom floor; maxBounds further limits zoom-out per screen so no voids show. */
 export const MIN_ZOOM = 3;
+
+/**
+ * Bounding box of a set of markers as [[west, south], [east, north]] — the order
+ * MapLibre's fitBounds/bounds option expects — or null when there are none. Used
+ * to frame a signed-in MRO's own stations on load.
+ */
+export function markerBounds(
+  markers: AirportMarker[],
+): [[number, number], [number, number]] | null {
+  if (markers.length === 0) return null;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (const m of markers) {
+    const [lng, lat] = m.coordinates;
+    if (lng < west) west = lng;
+    if (lng > east) east = lng;
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+  }
+  return [
+    [west, south],
+    [east, north],
+  ];
+}
+
+/**
+ * How close the initial "frame my stations" fit is allowed to zoom in. A lone
+ * station would otherwise fit at the extract's deepest level (rooftop detail);
+ * capping it leaves a single-station MRO at a comfortable city-scale view.
+ */
+export const FIT_MAX_ZOOM = 9;
+/** Padding (px) kept around the fitted stations so pins don't touch the edges. */
+export const FIT_PADDING = 72;

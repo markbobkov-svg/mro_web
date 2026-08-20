@@ -10,7 +10,10 @@ import {
   pickLabels,
   zoomScale,
   panelOffsetPx,
+  markerBounds,
   COVERAGE_BBOX,
+  FIT_MAX_ZOOM,
+  FIT_PADDING,
   LABEL_MIN_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -102,6 +105,7 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
       interactive = true,
       controls = true,
       dots,
+      fitMarkers = false,
     },
     ref,
   ) {
@@ -245,6 +249,12 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
           maplibregl.addProtocol("pmtiles", protocol.tile);
           maplibregl.__pmtilesRegistered = true;
         }
+        // A signed-in MRO frames its own stations on load; everyone else gets the
+        // deliberate whole-Europe view. Fitting via the constructor's `bounds`
+        // (rather than a fitBounds after load) means no flash of Europe first.
+        const initialBounds = fitMarkers
+          ? markerBounds(markersRef.current)
+          : null;
         try {
           map = new maplibregl.Map({
             container: containerRef.current,
@@ -265,8 +275,15 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
                 }),
               ),
             },
-            center: [10, 50],
-            zoom: 4,
+            ...(initialBounds
+              ? {
+                  bounds: initialBounds,
+                  fitBoundsOptions: {
+                    padding: FIT_PADDING,
+                    maxZoom: FIT_MAX_ZOOM,
+                  },
+                }
+              : { center: [10, 50], zoom: 4 }),
             minZoom: MIN_ZOOM,
             maxZoom: MAX_ZOOM,
             // Keep the view inside the area we actually extracted, so the

@@ -16,7 +16,10 @@ import {
   pickLabels,
   zoomScale,
   panelOffsetPx,
+  markerBounds,
   COVERAGE_BBOX,
+  FIT_MAX_ZOOM,
+  FIT_PADDING,
   LABEL_MIN_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -38,7 +41,7 @@ const ERROR_TILE =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPg4hMDAABUAC9qIiHaAAAAAElFTkSuQmCC";
 
 const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
-  function RasterBasemap({ markers, activeId, onSelect }, ref) {
+  function RasterBasemap({ markers, activeId, onSelect, fitMarkers = false }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const LRef = useRef<any>(null);
@@ -171,7 +174,28 @@ const RasterBasemap = forwardRef<BasemapHandle, BasemapProps>(
         map.on("zoom", scheduleLabels);
 
         setTimeout(() => {
-          if (!cancelled && mapRef.current) mapRef.current.invalidateSize();
+          if (cancelled || !mapRef.current) return;
+          mapRef.current.invalidateSize();
+          // A signed-in MRO lands framed on its own stations. Done after
+          // invalidateSize so the fit reads the true container size, and
+          // without animation so it's the initial view rather than a pan.
+          if (fitMarkers) {
+            const b = markerBounds(markers);
+            if (b) {
+              const [[west, south], [east, north]] = b;
+              mapRef.current.fitBounds(
+                [
+                  [south, west],
+                  [north, east],
+                ],
+                {
+                  padding: [FIT_PADDING, FIT_PADDING],
+                  maxZoom: FIT_MAX_ZOOM,
+                  animate: false,
+                },
+              );
+            }
+          }
         }, 0);
         setReady(true);
       })();

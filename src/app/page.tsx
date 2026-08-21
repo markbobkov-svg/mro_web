@@ -63,6 +63,7 @@ export default async function Home() {
       // A scoped MRO lands framed on its own stations; the full map keeps its
       // deliberate whole-Europe view.
       fitToMarkers={orgScope !== null && markers.length > 0}
+      scoped={orgScope !== null}
     />
   );
 }

@@ -7,17 +7,18 @@ hand. Everything here is disposable — see [Cleanup](#cleanup) when you are don
 
 ## Accounts
 
-All three have a confirmed e-mail already, so nothing depends on mail delivery
-(which is still limited — see the SMTP item in `CLAUDE.md`).
+All have a confirmed e-mail already, so nothing depends on mail delivery (which
+is still limited — see the SMTP item in `CLAUDE.md`).
 
 | Sign in as | Password | Exercises |
 |---|---|---|
 | `manager@test-mro.example.com` | `Demo-2026-test` | Domain matches the organisation's website → **claim is approved instantly** |
 | `manual-test@gmail.com` | `Demo-2026-test` | Free mailbox → **claim goes to the manual queue** |
+| `ops@test-airline.example.com` | `Demo-2026-test` | **Airline account** — lands on `/airline`, manages the demo airline below |
 | `markbobkov@gmail.com` | *(your own — not stored here)* | Administrator: the review queue at `/admin` |
 
-These two test accounts can only ever reach the demo organisation below. They
-are not administrators and hold nothing else.
+The two `…-mro`/`gmail` accounts only ever reach the demo organisation; the
+airline account only its demo airline. None are administrators.
 
 ## The demo organisation
 
@@ -29,6 +30,17 @@ It has **no station**, which is what keeps it off the public map: markers are
 built from `organisation_stations`, so an organisation without one is invisible
 to visitors while still being claimable from the dashboard. Verified — the
 public search does not return it.
+
+## The demo airline
+
+**Demo Air (ONE4FIVE test)** — a fabricated row in `airlines`, already linked to
+`ops@test-airline.example.com` through `airline_members` (so there is no claim
+step; the account lands straight on `/airline`). Airlines never appear on the
+public map, so it is invisible to visitors. The airline dashboard shows the
+airline's register details (read-only) and the account holder's own contact
+details (editable). Because this account *is* an airline and not an MRO, it sees
+the **whole** map — the "showing only your stations" note is for MRO members,
+who are scoped to their own network.
 
 ## A run through the whole flow
 
@@ -76,15 +88,22 @@ with demo as (
   select id from public.organisations where name = 'Demo MRO (ONE4FIVE test)'
 )
 delete from public.organisation_change_requests  where organisation_id in (select id from demo);
--- repeat for: organisation_managed_contacts, organisation_profiles,
---             organisation_claims, organisation_members,
+-- repeat for: organisation_managed_contacts, organisation_managed_station_scope,
+--             organisation_profiles, organisation_claims, organisation_members,
 --             organisation_scope, organisation_approvals, organisation_contacts
 delete from public.organisations where name = 'Demo MRO (ONE4FIVE test)';
+
+-- the demo airline and its membership
+delete from public.airline_members
+ where airline_id in (select id from public.airlines where name = 'Demo Air (ONE4FIVE test)');
+delete from public.airlines where name = 'Demo Air (ONE4FIVE test)';
+
 delete from public.app_users
- where email in ('manager@test-mro.example.com', 'manual-test@gmail.com');
+ where email in ('manager@test-mro.example.com', 'manual-test@gmail.com',
+                 'ops@test-airline.example.com');
 ```
 
-The two auth accounts themselves are removed from Authentication → Users in the
+The three auth accounts themselves are removed from Authentication → Users in the
 Supabase dashboard.
 
 Delete this file once the accounts are gone — it is only useful while they

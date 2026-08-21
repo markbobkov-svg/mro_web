@@ -15,6 +15,9 @@ interface Props {
   /** Frame the markers on load rather than the whole-Europe default — set when
    *  the signed-in viewer is an MRO seeing only its own stations. */
   fitToMarkers?: boolean;
+  /** The viewer is a scoped MRO (sees only its own network) — shows a quiet
+   *  "only your stations" note so an empty-looking map is never a surprise. */
+  scoped?: boolean;
 }
 
 type Engine = "vector" | "raster";
@@ -24,6 +27,7 @@ export default function MapView({
   organisationCount,
   loadError,
   fitToMarkers = false,
+  scoped = false,
 }: Props) {
   const basemapRef = useRef<BasemapHandle>(null);
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
@@ -308,6 +312,15 @@ export default function MapView({
     </p>
   ) : null;
 
+  // A quiet line for a scoped MRO, so a map framed on its own handful of pins
+  // doesn't read as "where is everyone else?".
+  const scopeNote =
+    scoped && !loadError ? (
+      <p className="mt-1 text-[10px] uppercase tracking-wide2 text-white/30">
+        Showing only your stations
+      </p>
+    ) : null;
+
   return (
     <div className="h-viewport relative w-screen overflow-hidden bg-black">
       {engine === "vector" && (
@@ -540,15 +553,19 @@ export default function MapView({
 
         {/* stats sit under the search bar on mobile; the suggestions open
             upwards from the bar, so they never cover this line */}
-        {countsCompact && (
-          <div className="mt-2 select-none px-0.5 sm:hidden">{countsCompact}</div>
+        {(countsCompact || scopeNote) && (
+          <div className="mt-2 select-none px-0.5 sm:hidden">
+            {countsCompact}
+            {scopeNote}
+          </div>
         )}
       </div>
 
       {/* bottom-left stats (≥sm — on mobile they sit under the search bar) */}
-      {countsFull && (
+      {(countsFull || scopeNote) && (
         <div className="pointer-events-none absolute bottom-6 left-6 z-[500] hidden select-none sm:block">
           {countsFull}
+          {scopeNote}
         </div>
       )}
 

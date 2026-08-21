@@ -36,6 +36,15 @@ body {
   height: 100dvh;
 }
 
+/* ---- Embedded (inside the map's dashboard drawer) ----
+   The dashboard opens as an <iframe> inside the map's right slide-in drawer,
+   which draws its own header bar. When a page detects it is framed (the
+   blocking script in the root layout adds `embedded` to <html>), hide its own
+   in-app header so the two don't stack into a double header. */
+html.embedded [data-app-header] {
+  display: none;
+}
+
 /* ---- SpaceX-ish typographic helpers ---- */
 .tracking-brand {
   letter-spacing: 0.28em;

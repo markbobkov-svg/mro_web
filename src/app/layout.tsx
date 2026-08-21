@@ -29,7 +29,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        {/* Flag pages that are framed (the map's dashboard drawer loads the
+            dashboard in a same-origin <iframe>) so globals.css can hide their
+            in-app header — the drawer draws its own. Runs before the header
+            paints, so there's no flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(window.self!==window.top)document.documentElement.classList.add('embedded')}catch(e){document.documentElement.classList.add('embedded')}",
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

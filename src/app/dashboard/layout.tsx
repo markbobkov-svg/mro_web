@@ -24,7 +24,10 @@ export default async function DashboardLayout({
 
   return (
     <div className="h-viewport overflow-y-auto scroll-thin bg-black">
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/70 backdrop-blur-xl">
+      <header
+        data-app-header
+        className="sticky top-0 z-10 border-b border-white/10 bg-black/70 backdrop-blur-xl"
+      >
         <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-5 py-3">
           <Link href="/" className="text-sm font-normal tracking-brand text-white">
             ONE<span className="text-accent-bright">4</span>FIVE

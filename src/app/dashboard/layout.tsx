@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { requireUser } from "@/lib/guards";
+import { requireUser, resolveHomePath } from "@/lib/guards";
 import { signOutAction } from "../(account)/actions";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,15 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+
+  // The MRO dashboard is for claiming and maintaining an organisation's listing.
+  // An airline account has no listing to claim — its home is /airline, which has
+  // no claim step — so send it there rather than show it the MRO claim UI.
+  // resolveHomePath returns "/airline" only for airline-side accounts with no
+  // organisation membership; org members and admins fall through to /dashboard.
+  if ((await resolveHomePath(user.id)) === "/airline") {
+    redirect("/airline");
+  }
 
   return (
     <div className="h-viewport overflow-y-auto scroll-thin bg-black">

@@ -4,7 +4,7 @@ import { Landing } from "@/components/Landing";
 import { hasSupabaseCredentials } from "@/lib/supabase";
 import { getAirportMarkers, getPublicStats } from "@/lib/data";
 import { getCurrentUser } from "@/lib/session";
-import { getViewerOrgScope } from "@/lib/guards";
+import { getViewerOrgScope, resolveHomePath } from "@/lib/guards";
 import type { AirportMarker } from "@/lib/types";
 
 // Always render fresh from the DB (data changes as the scraper runs), and it
@@ -42,7 +42,12 @@ export default async function Home() {
   // A signed-in MRO sees only its own network: the airports where it has a
   // station, and only its own card there. Everyone else (admins, airlines,
   // brand-new sign-ups) gets the whole map — see getViewerOrgScope.
-  const orgScope = await getViewerOrgScope(user);
+  // dashboardHref is where the map's Dashboard button opens (in a right drawer):
+  // airlines to /airline, everyone else to /dashboard.
+  const [orgScope, dashboardHref] = await Promise.all([
+    getViewerOrgScope(user),
+    resolveHomePath(user.id),
+  ]);
 
   let markers: AirportMarker[] = [];
   let organisationCount = 0;
@@ -64,6 +69,7 @@ export default async function Home() {
       // deliberate whole-Europe view.
       fitToMarkers={orgScope !== null && markers.length > 0}
       scoped={orgScope !== null}
+      dashboardHref={dashboardHref}
     />
   );
 }

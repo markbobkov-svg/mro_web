@@ -6,6 +6,7 @@ import { BasemapHandle, hasWebGL } from "@/lib/basemap";
 import AirportPanel from "./AirportPanel";
 import RasterBasemap from "./RasterBasemap";
 import VectorBasemap from "./VectorBasemap";
+import { signOutAction } from "@/app/(account)/actions";
 
 interface Props {
   markers: AirportMarker[];
@@ -18,6 +19,9 @@ interface Props {
   /** The viewer is a scoped MRO (sees only its own network) — shows a quiet
    *  "only your stations" note so an empty-looking map is never a surprise. */
   scoped?: boolean;
+  /** Where the top-right Dashboard button opens (in a right slide-in drawer):
+   *  airlines to /airline, everyone else to /dashboard. */
+  dashboardHref?: string;
 }
 
 type Engine = "vector" | "raster";
@@ -28,6 +32,7 @@ export default function MapView({
   loadError,
   fitToMarkers = false,
   scoped = false,
+  dashboardHref = "/dashboard",
 }: Props) {
   const basemapRef = useRef<BasemapHandle>(null);
   const detailCache = useRef<Map<string, AirportDetail>>(new Map());
@@ -36,6 +41,10 @@ export default function MapView({
   const listRef = useRef<HTMLDivElement>(null);
 
   const [engine, setEngine] = useState<Engine | null>(null);
+  // The dashboard opens in a right slide-in drawer (an iframe of the user's own
+  // dashboard); mounted lazily on first open, then kept so it doesn't reload.
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [dashboardMounted, setDashboardMounted] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AirportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -240,6 +249,21 @@ export default function MapView({
 
   const onVectorFail = useCallback(() => setEngine("raster"), []);
 
+  const openDashboard = useCallback(() => {
+    setDashboardMounted(true);
+    setDashboardOpen(true);
+  }, []);
+
+  // Escape closes the dashboard drawer.
+  useEffect(() => {
+    if (!dashboardOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDashboardOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dashboardOpen]);
+
   const activeMarker = activeId
     ? markers.find((m) => m.id === activeId) ?? null
     : null;
@@ -367,13 +391,6 @@ export default function MapView({
           <p className="mt-1.5 text-[10px] font-medium uppercase tracking-brand text-accent-bright/80">
             Part-145 · MRO · Europe
           </p>
-          <a
-            href="/dashboard"
-            className="pointer-events-auto mt-2 inline-block text-[10px] uppercase tracking-wide2
-              text-white/35 transition hover:text-white/70"
-          >
-            For MRO organisations →
-          </a>
         </div>
 
         {/* pushes the search bar to the bottom edge on mobile only */}
@@ -561,6 +578,32 @@ export default function MapView({
         )}
       </div>
 
+      {/* top-right account chrome: Dashboard (opens a right drawer) + Logout.
+          Hidden while an airport panel is open, like the brand/search block. */}
+      {!activeId && (
+        <div className="absolute right-0 top-0 z-[500] flex items-center gap-2 p-5 sm:p-6">
+          <button
+            type="button"
+            onClick={openDashboard}
+            className="pointer-events-auto rounded-[2px] border border-accent/40 bg-accent/15 px-3 py-1.5
+              text-[10px] uppercase tracking-wide2 text-accent-bright shadow-lg shadow-black/20
+              backdrop-blur-xl transition hover:bg-accent/25 hover:text-white"
+          >
+            Dashboard
+          </button>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              className="pointer-events-auto rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-1.5
+                text-[10px] uppercase tracking-wide2 text-white/55 shadow-lg shadow-black/20
+                backdrop-blur-xl transition hover:bg-white/10 hover:text-white"
+            >
+              Logout
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* bottom-left stats (≥sm — on mobile they sit under the search bar) */}
       {(countsFull || scopeNote) && (
         <div className="pointer-events-none absolute bottom-6 left-6 z-[500] hidden select-none sm:block">
@@ -593,6 +636,59 @@ export default function MapView({
           onClose={closePanel}
         />
       )}
+
+      {/* Dashboard drawer — the user's own dashboard as a right slide-in panel
+          over the map (an iframe of dashboardHref: /dashboard or /airline), so
+          it opens without leaving the map. */}
+      <div
+        className={`absolute inset-0 z-[900] ${dashboardOpen ? "" : "pointer-events-none"}`}
+        aria-hidden={!dashboardOpen}
+      >
+        <div
+          className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${
+            dashboardOpen ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={() => setDashboardOpen(false)}
+        />
+        <div
+          className={`absolute right-0 top-0 flex h-full w-full max-w-[720px] transform flex-col
+            border-l border-white/10 bg-black shadow-2xl transition-transform duration-300 ${
+              dashboardOpen ? "translate-x-0" : "translate-x-full"
+            }`}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-2">
+            <span className="text-[10px] uppercase tracking-wide2 text-white/45">
+              Dashboard
+            </span>
+            <div className="flex items-center gap-3">
+              <a
+                href={dashboardHref}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] uppercase tracking-wide2 text-white/35 transition hover:text-white/70"
+              >
+                Full page ↗
+              </a>
+              <button
+                type="button"
+                onClick={() => setDashboardOpen(false)}
+                aria-label="Close dashboard"
+                className="rounded-[2px] border border-white/10 px-2 py-1 text-xs leading-none text-white/60
+                  transition hover:bg-white/10 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          {dashboardMounted && (
+            <iframe
+              src={dashboardHref}
+              title="Dashboard"
+              className="h-full w-full flex-1 border-0 bg-black"
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

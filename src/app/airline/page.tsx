@@ -4,6 +4,7 @@ import {
   activateAirlineMemberships,
   getAirline,
   getUserAirlineRegistrations,
+  type AirlineRegistrationRow,
 } from "@/lib/airlines";
 import { getAirlineMemberships, requireUser } from "@/lib/guards";
 import { websiteDomain } from "@/lib/domains";
@@ -11,11 +12,20 @@ import { Alert } from "@/components/ui/Form";
 import type { CurrentUser } from "@/lib/session";
 import { signOutAction } from "../(account)/actions";
 import { AccountForm } from "./AccountForm";
-import { ConnectAirline } from "./ConnectAirline";
 
 export const metadata = { title: "Airline dashboard — ONE4FIVE" };
 export const dynamic = "force-dynamic";
 
+/**
+ * The airline dashboard has no claim step.
+ *
+ * Unlike an MRO — which claims a listing that already exists on the map — an
+ * airline is verified once, at registration (`/airline/register`): the person
+ * picks their airline and we auto-approve when their work-e-mail domain matches
+ * the airline's website, else queue it for an admin. So the dashboard is never a
+ * place to "connect an airline"; it only reflects where that one decision landed
+ * — you manage your airline, you're waiting on review, or you were turned down.
+ */
 export default async function AirlineDashboard() {
   const user = await requireUser("/airline");
 
@@ -32,21 +42,13 @@ export default async function AirlineDashboard() {
   const airline = primary ? await getAirline(primary.airlineId) : null;
 
   const pending = registrations.filter((r) => r.status === "pending");
+  const approved = registrations.filter((r) => r.status === "approved");
   const rejected = registrations.filter((r) => r.status === "rejected");
 
   return (
     <>
       <Header user={user} />
       <main className="mx-auto w-full max-w-3xl px-5 py-8">
-        {!user.emailConfirmed ? (
-          <div className="mb-8">
-            <Alert kind="error">
-              Your e-mail isn&rsquo;t confirmed yet. Click the link we sent, then
-              reload — that confirmation is what opens your account.
-            </Alert>
-          </div>
-        ) : null}
-
         {primary ? (
           <MemberView
             airlineName={airline?.name ?? primary.airlineName}
@@ -55,16 +57,28 @@ export default async function AirlineDashboard() {
             otherCount={memberships.length - 1}
             user={user}
           />
-        ) : pending.length > 0 ? (
-          <PendingView
-            names={pending.map((p) => p.airlineName ?? p.proposedName ?? "your airline")}
+        ) : !user.emailConfirmed && registrations.length > 0 ? (
+          // Confirmation gates everything — nothing proceeds until the e-mail is
+          // clicked, whether the registration auto-approved or is queued.
+          <ConfirmEmailView
+            email={user.email}
+            names={regNames([...approved, ...pending, ...rejected])}
           />
+        ) : pending.length > 0 || approved.length > 0 ? (
+          <PendingView names={regNames([...pending, ...approved])} />
+        ) : rejected.length > 0 ? (
+          <RejectedView items={rejected} />
         ) : (
-          <ConnectView userEmail={user.email} rejected={rejected} />
+          <NotLinkedView email={user.email} />
         )}
       </main>
     </>
   );
+}
+
+function regNames(rows: AirlineRegistrationRow[]): string[] {
+  const names = rows.map((r) => r.airlineName ?? r.proposedName ?? "your airline");
+  return [...new Set(names)];
 }
 
 function Header({ user }: { user: CurrentUser }) {
@@ -207,6 +221,37 @@ function MemberView({
   );
 }
 
+/**
+ * Auto-approved or queued, the account still can't open until the e-mail is
+ * confirmed — so that is the only thing to say here.
+ */
+function ConfirmEmailView({ email, names }: { email: string; names: string[] }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-lg font-normal tracking-wide2 text-white">
+          Almost there
+        </h1>
+        <p className="mt-1 text-sm text-white/45">One step left to open your account.</p>
+      </div>
+      <Alert kind="error">
+        Confirm your e-mail to finish. We sent a link to{" "}
+        <span className="text-white/85">{email}</span> — click it, then reload.
+        {names.length > 0 ? (
+          <>
+            {" "}
+            That confirmation is what opens your dashboard for{" "}
+            <strong>{names.join(", ")}</strong>.
+          </>
+        ) : (
+          <> That confirmation is what opens your dashboard.</>
+        )}
+      </Alert>
+      <BackToMap />
+    </div>
+  );
+}
+
 function PendingView({ names }: { names: string[] }) {
   return (
     <div className="space-y-6">
@@ -215,60 +260,98 @@ function PendingView({ names }: { names: string[] }) {
           Registration received
         </h1>
         <p className="mt-1 text-sm text-white/45">
-          We&rsquo;re reviewing your request by hand.
+          Nothing more to do — we&rsquo;ll take it from here.
         </p>
       </div>
       <Alert kind="notice">
-        Your registration for{" "}
-        <strong>{names.join(", ")}</strong> is with our team. We check it when the
-        e-mail domain doesn&rsquo;t match the airline&rsquo;s website — you&rsquo;ll
-        get access here as soon as it&rsquo;s approved.
+        Your registration for <strong>{names.join(", ")}</strong> is being
+        processed. When the e-mail domain doesn&rsquo;t match the airline&rsquo;s
+        website we review it by hand — you&rsquo;ll get access here as soon as
+        it&rsquo;s approved.
       </Alert>
-      <Link href="/" className="inline-block text-sm text-accent transition hover:text-accent-bright">
-        ← Back to the map
-      </Link>
+      <BackToMap />
     </div>
   );
 }
 
-function ConnectView({
-  userEmail,
-  rejected,
-}: {
-  userEmail: string;
-  rejected: { id: string; airlineName: string | null; proposedName: string | null; reviewNote: string | null }[];
-}) {
+/**
+ * A turned-down registration. Purely informational: the reviewer's reason, and
+ * how verification works — there is no in-dashboard retry to file, because a
+ * fresh registration from a matching work e-mail is the way back in.
+ */
+function RejectedView({ items }: { items: AirlineRegistrationRow[] }) {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-normal tracking-wide2 text-white">
-          Connect your airline
+          Registration not approved
         </h1>
         <p className="mt-1 text-sm text-white/45">
-          Signed in as <span className="text-white/70">{userEmail}</span>. Link
-          your airline to open your dashboard.
+          We couldn&rsquo;t confirm your link to the airline.
         </p>
       </div>
 
-      {rejected.length > 0 ? (
-        <section className="space-y-2">
-          {rejected.map((r) => (
-            <div
-              key={r.id}
-              className="rounded-[2px] border border-white/10 bg-[#141414]/60 px-4 py-3"
-            >
-              <p className="text-sm text-white/70">
-                {r.airlineName ?? r.proposedName} — not approved
-              </p>
-              {r.reviewNote ? (
-                <p className="mt-1 text-xs text-white/35">{r.reviewNote}</p>
-              ) : null}
-            </div>
-          ))}
-        </section>
-      ) : null}
+      <section className="space-y-2">
+        {items.map((r) => (
+          <div
+            key={r.id}
+            className="rounded-[2px] border border-white/10 bg-[#141414]/60 px-4 py-3"
+          >
+            <p className="text-sm text-white/70">
+              {r.airlineName ?? r.proposedName ?? "Your airline"}
+            </p>
+            {r.reviewNote ? (
+              <p className="mt-1 text-xs text-white/35">{r.reviewNote}</p>
+            ) : null}
+          </div>
+        ))}
+      </section>
 
-      <ConnectAirline userEmail={userEmail} />
+      <Alert kind="info">
+        We verify airlines from your work e-mail&rsquo;s domain. Registering from
+        an address on the airline&rsquo;s own website domain is approved
+        automatically; otherwise reply to our e-mail and we&rsquo;ll take another
+        look.
+      </Alert>
+
+      <BackToMap />
     </div>
+  );
+}
+
+/**
+ * A signed-in account with no airline registration at all — reachable only by
+ * an MRO or other account visiting `/airline` directly, since the airline flow
+ * always leaves a registration behind. Just point them back out.
+ */
+function NotLinkedView({ email }: { email: string }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-lg font-normal tracking-wide2 text-white">
+          No airline linked
+        </h1>
+        <p className="mt-1 text-sm text-white/45">
+          Signed in as <span className="text-white/70">{email}</span>.
+        </p>
+      </div>
+      <Alert kind="info">
+        This account isn&rsquo;t registered to an airline. Airline accounts are
+        created at registration, where we verify your work e-mail against the
+        airline&rsquo;s website.
+      </Alert>
+      <BackToMap />
+    </div>
+  );
+}
+
+function BackToMap() {
+  return (
+    <Link
+      href="/"
+      className="inline-block text-sm text-accent transition hover:text-accent-bright"
+    >
+      ← Back to the map
+    </Link>
   );
 }

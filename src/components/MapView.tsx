@@ -39,12 +39,17 @@ export default function MapView({
   const activeIdRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const drawerPanelRef = useRef<HTMLDivElement>(null);
+  // Live state of a swipe-to-close drag on the dashboard drawer (touch only).
+  const swipe = useRef<{ x: number; y: number; w: number; axis: "" | "h" | "v"; dx: number } | null>(null);
 
   const [engine, setEngine] = useState<Engine | null>(null);
   // The dashboard opens in a right slide-in drawer (an iframe of the user's own
   // dashboard); mounted lazily on first open, then kept so it doesn't reload.
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [dashboardMounted, setDashboardMounted] = useState(false);
+  // Rightward drag offset (px) while swiping the drawer closed; null when idle.
+  const [swipeX, setSwipeX] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AirportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -263,6 +268,51 @@ export default function MapView({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [dashboardOpen]);
+
+  // Swipe-to-close for the drawer (touch). The panel is mostly an <iframe>, and
+  // touches that start inside an iframe never reach us — so these handlers live
+  // on the parent-owned handles (the header bar and a left-edge grab strip). A
+  // touch sequence stays with the element it started on, so the finger may move
+  // across the iframe once the drag has begun. `touch-action: none` on those
+  // handles stops the browser scrolling/zooming, so no preventDefault is needed.
+  const onSwipeStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    swipe.current = {
+      x: t.clientX,
+      y: t.clientY,
+      w: drawerPanelRef.current?.offsetWidth ?? window.innerWidth,
+      axis: "",
+      dx: 0,
+    };
+  }, []);
+
+  const onSwipeMove = useCallback((e: React.TouchEvent) => {
+    const s = swipe.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // Lock the axis once the finger has clearly moved, so a vertical drag (or a
+    // tap on a header button) is never mistaken for a close gesture.
+    if (s.axis === "") {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+    }
+    if (s.axis !== "h") return;
+    s.dx = Math.max(0, dx); // only a rightward pull dismisses the right drawer
+    setSwipeX(s.dx);
+  }, []);
+
+  const onSwipeEnd = useCallback(() => {
+    const s = swipe.current;
+    swipe.current = null;
+    // Past a third of the panel's width (capped) it dismisses; otherwise the
+    // panel springs back to open as the inline transform is dropped.
+    if (s && s.axis === "h" && s.dx > Math.min(s.w * 0.33, 140)) {
+      setDashboardOpen(false);
+    }
+    setSwipeX(null);
+  }, []);
 
   const activeMarker = activeId
     ? markers.find((m) => m.id === activeId) ?? null
@@ -651,12 +701,38 @@ export default function MapView({
           onClick={() => setDashboardOpen(false)}
         />
         <div
+          ref={drawerPanelRef}
           className={`absolute right-0 top-0 flex h-full w-full max-w-[720px] transform flex-col
-            border-l border-white/10 bg-black shadow-2xl transition-transform duration-300 ${
+            overflow-hidden border-l border-white/10 bg-black shadow-2xl transition-transform duration-300 ${
               dashboardOpen ? "translate-x-0" : "translate-x-full"
             }`}
+          style={
+            swipeX != null
+              ? { transform: `translateX(${swipeX}px)`, transition: "none" }
+              : undefined
+          }
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-2">
+          {/* Left-edge grab strip: swipe it rightward to close (touch/mobile).
+              It sits above the iframe so the gesture reaches us instead of being
+              swallowed by the framed page. Hidden from ≥sm, where the ✕ and the
+              backdrop click do the closing. */}
+          <div
+            onTouchStart={onSwipeStart}
+            onTouchMove={onSwipeMove}
+            onTouchEnd={onSwipeEnd}
+            aria-hidden
+            className="absolute left-0 top-0 z-10 flex h-full w-6 touch-none select-none
+              items-center justify-center sm:hidden"
+          >
+            <span className="h-10 w-1 rounded-full bg-white/25" />
+          </div>
+          <div
+            onTouchStart={onSwipeStart}
+            onTouchMove={onSwipeMove}
+            onTouchEnd={onSwipeEnd}
+            className="flex shrink-0 touch-none select-none items-center justify-between
+              border-b border-white/10 px-4 py-2"
+          >
             <span className="text-[10px] uppercase tracking-wide2 text-white/45">
               Dashboard
             </span>

@@ -51,6 +51,9 @@ export default function MapView({
   const [dashboardMounted, setDashboardMounted] = useState(false);
   // Rightward drag offset (px) while swiping the drawer closed; null when idle.
   const [swipeX, setSwipeX] = useState<number | null>(null);
+  // The iframe paints its own dark theme only once loaded; until then a dark
+  // veil hides the browser's default white canvas. True until the first load.
+  const [iframeLoading, setIframeLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AirportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -370,9 +373,13 @@ export default function MapView({
       doc.addEventListener("touchend", endSwipe, passive);
       doc.addEventListener("touchcancel", endSwipe, passive);
     };
+    const onLoad = () => {
+      setIframeLoading(false); // drop the veil once the dashboard has painted
+      wire(); // (re-)wire the swipe gesture onto the freshly loaded document
+    };
     wire(); // already loaded before the effect ran
-    iframe.addEventListener("load", wire); // and re-wire after in-iframe nav
-    return () => iframe.removeEventListener("load", wire);
+    iframe.addEventListener("load", onLoad); // and re-wire after in-iframe nav
+    return () => iframe.removeEventListener("load", onLoad);
   }, [dashboardMounted, beginSwipe, moveSwipe, endSwipe]);
 
   const activeMarker = activeId
@@ -808,12 +815,32 @@ export default function MapView({
             </div>
           </div>
           {dashboardMounted && (
-            <iframe
-              ref={dashboardIframeRef}
-              src={dashboardHref}
-              title="Dashboard"
-              className="h-full w-full flex-1 border-0 bg-black"
-            />
+            <div className="relative flex-1">
+              <iframe
+                ref={dashboardIframeRef}
+                src={dashboardHref}
+                title="Dashboard"
+                // color-scheme: dark makes the browser paint the iframe's own
+                // loading/blank canvas dark instead of the default white, so
+                // there's no white flash before the dashboard's CSS applies.
+                style={{ colorScheme: "dark" }}
+                className="h-full w-full border-0 bg-black"
+              />
+              {/* Dark veil over the still-loading iframe; fades out on load so
+                  the dashboard appears without a flash. pointer-events-none so it
+                  never blocks the content or the swipe underneath. */}
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-0 flex items-center justify-center
+                  bg-black transition-opacity duration-500 ${
+                    iframeLoading ? "opacity-100" : "opacity-0"
+                  }`}
+              >
+                <span
+                  className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/40"
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>

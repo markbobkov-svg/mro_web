@@ -780,7 +780,7 @@ export default function MapView({
             onTouchMove={onSwipeMove}
             onTouchEnd={endSwipe}
             className="flex shrink-0 touch-none select-none items-center justify-between
-              border-b border-white/10 px-4 py-2"
+              px-4 py-2"
           >
             <span className="text-[10px] uppercase tracking-wide2 text-white/45">
               Dashboard
@@ -827,7 +827,7 @@ export default function MapView({
               the top document (not the iframe), so signing out navigates the
               whole page to the signed-out landing rather than only the framed
               dashboard view — which would leave the map behind it stale. */}
-          <div className="flex shrink-0 items-center justify-end border-t border-white/10 px-4 pt-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))]">
+          <div className="flex shrink-0 items-center justify-center px-4 pt-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))]">
             <form action={signOutAction}>
               <button
                 type="submit"

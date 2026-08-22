@@ -345,7 +345,7 @@ export default function MapView({
     if (!dashboardMounted) return;
     const iframe = dashboardIframeRef.current;
     if (!iframe) return;
-    const opt = { passive: true } as const;
+    const passive = { passive: true } as const;
     // clientX inside the iframe is relative to the iframe's (moving) viewport;
     // add the panel's live left edge to recover the finger's top-viewport X.
     const panelLeft = () => drawerPanelRef.current?.getBoundingClientRect().left ?? 0;
@@ -356,13 +356,19 @@ export default function MapView({
       doc.addEventListener("touchstart", (ev) => {
         const t = (ev as TouchEvent).touches[0];
         if (t) beginSwipe(t.clientX + panelLeft(), t.clientY);
-      }, opt);
+      }, passive);
+      // touchmove is non-passive so that, once the gesture locks into a
+      // horizontal close-drag, we can preventDefault to freeze the dashboard's
+      // own scroll underneath it. A vertical gesture never locks to "h", so
+      // scrolling the dashboard stays completely normal.
       doc.addEventListener("touchmove", (ev) => {
         const t = (ev as TouchEvent).touches[0];
-        if (t) moveSwipe(t.clientX + panelLeft(), t.clientY);
-      }, opt);
-      doc.addEventListener("touchend", endSwipe, opt);
-      doc.addEventListener("touchcancel", endSwipe, opt);
+        if (!t) return;
+        moveSwipe(t.clientX + panelLeft(), t.clientY);
+        if (swipe.current?.axis === "h") ev.preventDefault();
+      }, { passive: false });
+      doc.addEventListener("touchend", endSwipe, passive);
+      doc.addEventListener("touchcancel", endSwipe, passive);
     };
     wire(); // already loaded before the effect ran
     iframe.addEventListener("load", wire); // and re-wire after in-iframe nav

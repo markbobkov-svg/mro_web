@@ -40,6 +40,7 @@ export default function MapView({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
+  const dashboardIframeRef = useRef<HTMLIFrameElement>(null);
   // Live state of a swipe-to-close drag on the dashboard drawer (touch only).
   const swipe = useRef<{ x: number; y: number; w: number; axis: "" | "h" | "v"; dx: number } | null>(null);
 
@@ -269,31 +270,39 @@ export default function MapView({
     return () => window.removeEventListener("keydown", onKey);
   }, [dashboardOpen]);
 
-  // Swipe-to-close for the drawer (touch). The panel is mostly an <iframe>, and
-  // touches that start inside an iframe never reach us — so these handlers live
-  // on the parent-owned handles (the header bar and a left-edge grab strip). A
-  // touch sequence stays with the element it started on, so the finger may move
-  // across the iframe once the drag has begun. `touch-action: none` on those
-  // handles stops the browser scrolling/zooming, so no preventDefault is needed.
-  const onSwipeStart = useCallback((e: React.TouchEvent) => {
-    const t = e.touches[0];
+  // Swipe-to-close for the drawer (touch), working anywhere on the panel. The
+  // panel is mostly a same-origin <iframe>, and touches that start inside an
+  // iframe are delivered to *its* document and never bubble out to us — so we
+  // feed one gesture engine from two places: the header bar (ours) and, attached
+  // on load, the iframe's own document.
+  //
+  // The engine works in top-viewport X. From the header that's just clientX.
+  // From inside the iframe it is not: as the panel follows the finger, the
+  // iframe's viewport slides with it, so its clientX shrinks by exactly the
+  // panel's offset — feed that back raw and the panel judders. We convert by
+  // adding the panel's live left edge (getBoundingClientRect already includes
+  // the drag transform): clientX-in-iframe + panelLeft is the finger's true
+  // viewport X, steady however far the panel has travelled. `touch-action: none`
+  // on the header stops the browser scrolling there; inside the iframe we stay
+  // passive so the dashboard keeps scrolling vertically, and the axis lock
+  // ignores those vertical drags.
+  const beginSwipe = useCallback((px: number, py: number) => {
     swipe.current = {
-      x: t.clientX,
-      y: t.clientY,
+      x: px,
+      y: py,
       w: drawerPanelRef.current?.offsetWidth ?? window.innerWidth,
       axis: "",
       dx: 0,
     };
   }, []);
 
-  const onSwipeMove = useCallback((e: React.TouchEvent) => {
+  const moveSwipe = useCallback((px: number, py: number) => {
     const s = swipe.current;
     if (!s) return;
-    const t = e.touches[0];
-    const dx = t.clientX - s.x;
-    const dy = t.clientY - s.y;
-    // Lock the axis once the finger has clearly moved, so a vertical drag (or a
-    // tap on a header button) is never mistaken for a close gesture.
+    const dx = px - s.x;
+    const dy = py - s.y;
+    // Lock the axis once the finger has clearly moved, so a vertical scroll (or
+    // a tap on a header button) is never mistaken for a close gesture.
     if (s.axis === "") {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       s.axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
@@ -303,7 +312,7 @@ export default function MapView({
     setSwipeX(s.dx);
   }, []);
 
-  const onSwipeEnd = useCallback(() => {
+  const endSwipe = useCallback(() => {
     const s = swipe.current;
     swipe.current = null;
     // Past a third of the panel's width (capped) it dismisses; otherwise the
@@ -313,6 +322,52 @@ export default function MapView({
     }
     setSwipeX(null);
   }, []);
+
+  // Parent-document (header handle) touch handlers — clientX is already the
+  // finger's viewport X here, since the header lives in the top document.
+  const onSwipeStart = useCallback(
+    (e: React.TouchEvent) => beginSwipe(e.touches[0].clientX, e.touches[0].clientY),
+    [beginSwipe],
+  );
+  const onSwipeMove = useCallback(
+    (e: React.TouchEvent) => moveSwipe(e.touches[0].clientX, e.touches[0].clientY),
+    [moveSwipe],
+  );
+
+  // Wire the same gesture into the iframe's own document, so a swipe that starts
+  // over the dashboard content closes the drawer too. It's same-origin, so we
+  // can reach in. We use a native `load` listener (React's onLoad on an iframe
+  // is unreliable) plus an immediate pass for the case where it already loaded
+  // before this effect ran; a per-document flag stops double-wiring, and the
+  // listeners die with the document on navigation/unmount. Passive throughout,
+  // so vertical scrolling inside the dashboard is untouched.
+  useEffect(() => {
+    if (!dashboardMounted) return;
+    const iframe = dashboardIframeRef.current;
+    if (!iframe) return;
+    const opt = { passive: true } as const;
+    // clientX inside the iframe is relative to the iframe's (moving) viewport;
+    // add the panel's live left edge to recover the finger's top-viewport X.
+    const panelLeft = () => drawerPanelRef.current?.getBoundingClientRect().left ?? 0;
+    const wire = () => {
+      const doc = iframe.contentDocument;
+      if (!doc || (doc as unknown as { __o4fWired?: boolean }).__o4fWired) return;
+      (doc as unknown as { __o4fWired?: boolean }).__o4fWired = true;
+      doc.addEventListener("touchstart", (ev) => {
+        const t = (ev as TouchEvent).touches[0];
+        if (t) beginSwipe(t.clientX + panelLeft(), t.clientY);
+      }, opt);
+      doc.addEventListener("touchmove", (ev) => {
+        const t = (ev as TouchEvent).touches[0];
+        if (t) moveSwipe(t.clientX + panelLeft(), t.clientY);
+      }, opt);
+      doc.addEventListener("touchend", endSwipe, opt);
+      doc.addEventListener("touchcancel", endSwipe, opt);
+    };
+    wire(); // already loaded before the effect ran
+    iframe.addEventListener("load", wire); // and re-wire after in-iframe nav
+    return () => iframe.removeEventListener("load", wire);
+  }, [dashboardMounted, beginSwipe, moveSwipe, endSwipe]);
 
   const activeMarker = activeId
     ? markers.find((m) => m.id === activeId) ?? null
@@ -712,24 +767,14 @@ export default function MapView({
               : undefined
           }
         >
-          {/* Left-edge grab strip: swipe it rightward to close (touch/mobile).
-              It sits above the iframe so the gesture reaches us instead of being
-              swallowed by the framed page. Hidden from ≥sm, where the ✕ and the
-              backdrop click do the closing. */}
+          {/* The header bar is a drag handle (swipe it right to close); the same
+              gesture also works over the dashboard content via the iframe touch
+              listeners wired above. `touch-action: none` keeps the browser from
+              scrolling here. */}
           <div
             onTouchStart={onSwipeStart}
             onTouchMove={onSwipeMove}
-            onTouchEnd={onSwipeEnd}
-            aria-hidden
-            className="absolute left-0 top-0 z-10 flex h-full w-6 touch-none select-none
-              items-center justify-center sm:hidden"
-          >
-            <span className="h-10 w-1 rounded-full bg-white/25" />
-          </div>
-          <div
-            onTouchStart={onSwipeStart}
-            onTouchMove={onSwipeMove}
-            onTouchEnd={onSwipeEnd}
+            onTouchEnd={endSwipe}
             className="flex shrink-0 touch-none select-none items-center justify-between
               border-b border-white/10 px-4 py-2"
           >
@@ -758,6 +803,7 @@ export default function MapView({
           </div>
           {dashboardMounted && (
             <iframe
+              ref={dashboardIframeRef}
               src={dashboardHref}
               title="Dashboard"
               className="h-full w-full flex-1 border-0 bg-black"

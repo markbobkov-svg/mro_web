@@ -696,8 +696,9 @@ export default function MapView({
         )}
       </div>
 
-      {/* top-right account chrome: Dashboard (opens a right drawer) + Logout.
-          Hidden while an airport panel is open, like the brand/search block. */}
+      {/* top-right account chrome: Dashboard (opens a right drawer). Logout now
+          lives at the foot of that drawer, not here. Hidden while an airport
+          panel is open, like the brand/search block. */}
       {!activeId && (
         <div className="absolute right-0 top-0 z-[500] flex items-center gap-2 p-5 sm:p-6">
           <button
@@ -709,16 +710,6 @@ export default function MapView({
           >
             Dashboard
           </button>
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="pointer-events-auto rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-1.5
-                text-[10px] uppercase tracking-wide2 text-white/55 shadow-lg shadow-black/20
-                backdrop-blur-xl transition hover:bg-white/10 hover:text-white"
-            >
-              Logout
-            </button>
-          </form>
         </div>
       )}
 
@@ -794,25 +785,15 @@ export default function MapView({
             <span className="text-[10px] uppercase tracking-wide2 text-white/45">
               Dashboard
             </span>
-            <div className="flex items-center gap-3">
-              <a
-                href={dashboardHref}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[10px] uppercase tracking-wide2 text-white/35 transition hover:text-white/70"
-              >
-                Full page ↗
-              </a>
-              <button
-                type="button"
-                onClick={() => setDashboardOpen(false)}
-                aria-label="Close dashboard"
-                className="rounded-[2px] border border-white/10 px-2 py-1 text-xs leading-none text-white/60
-                  transition hover:bg-white/10 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setDashboardOpen(false)}
+              aria-label="Close dashboard"
+              className="rounded-[2px] border border-white/10 px-2 py-1 text-xs leading-none text-white/60
+                transition hover:bg-white/10 hover:text-white"
+            >
+              ✕
+            </button>
           </div>
           {dashboardMounted && (
             <div className="relative flex-1">
@@ -842,6 +823,22 @@ export default function MapView({
               </div>
             </div>
           )}
+          {/* Logout sits at the foot of the dashboard drawer. The form submits in
+              the top document (not the iframe), so signing out navigates the
+              whole page to the signed-out landing rather than only the framed
+              dashboard view — which would leave the map behind it stale. */}
+          <div className="flex shrink-0 items-center justify-end border-t border-white/10 px-4 pt-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))]">
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="rounded-[2px] border border-white/10 bg-[#141414]/60 px-4 py-1.5
+                  text-[10px] uppercase tracking-wide2 text-white/55 transition
+                  hover:bg-white/10 hover:text-white"
+              >
+                Logout
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

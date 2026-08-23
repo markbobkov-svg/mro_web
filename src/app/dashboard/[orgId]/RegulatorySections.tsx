@@ -5,6 +5,7 @@ import { useFormState } from "react-dom";
 
 import { proposeChangeAction, type ActionState } from "../actions";
 import type {
+  AuthorityOption,
   DashboardApproval,
   DashboardOrg,
   DashboardStation,
@@ -23,7 +24,13 @@ const EMPTY: ActionState = {};
 
 // ------------------------------------------------------------- approvals ---
 
-export function ApprovalsPanel({ org }: { org: DashboardOrg }) {
+export function ApprovalsPanel({
+  org,
+  authorities,
+}: {
+  org: DashboardOrg;
+  authorities: AuthorityOption[];
+}) {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
@@ -74,6 +81,7 @@ export function ApprovalsPanel({ org }: { org: DashboardOrg }) {
                   <ApprovalChangeForm
                     org={org}
                     approval={a}
+                    authorities={authorities}
                     onDone={() => setOpen(null)}
                   />
                 </div>
@@ -84,7 +92,12 @@ export function ApprovalsPanel({ org }: { org: DashboardOrg }) {
       )}
 
       <AddToggle label="+ Propose a missing approval">
-        <ApprovalChangeForm org={org} approval={null} onDone={() => {}} />
+        <ApprovalChangeForm
+          org={org}
+          approval={null}
+          authorities={authorities}
+          onDone={() => {}}
+        />
       </AddToggle>
     </div>
   );
@@ -93,10 +106,12 @@ export function ApprovalsPanel({ org }: { org: DashboardOrg }) {
 function ApprovalChangeForm({
   org,
   approval,
+  authorities,
   onDone,
 }: {
   org: DashboardOrg;
   approval: DashboardApproval | null;
+  authorities: AuthorityOption[];
   onDone: () => void;
 }) {
   const [state, action] = useFormState(proposeChangeAction, EMPTY);
@@ -109,6 +124,9 @@ function ApprovalChangeForm({
       <input type="hidden" name="target" value="approval" />
       <input type="hidden" name="action" value={isNew ? "add" : mode} />
       {approval ? <input type="hidden" name="targetId" value={approval.id} /> : null}
+      {/* Every approval on this map is a Part-145 approval — assign it by
+          default rather than asking, so there's no type field to fill in. */}
+      {isNew ? <input type="hidden" name="approvalType" value="Part-145" /> : null}
 
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
       {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
@@ -126,18 +144,29 @@ function ApprovalChangeForm({
 
       {mode === "update" || isNew ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Authority" hint="EASA, FAA, UK-CAA…">
-            <Input
+          <Field label="Authority" hint="from the authorities register">
+            <select
               name="authorityCode"
               defaultValue={approval?.authorityCode ?? ""}
-              placeholder="EASA"
-            />
-          </Field>
-          <Field label="Approval type">
-            <Input
-              name="approvalType"
-              defaultValue={approval?.approvalType ?? "Part-145"}
-            />
+              required
+              className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm
+                text-white/90 outline-none focus:border-accent"
+            >
+              <option value="">Select authority…</option>
+              {authorities.map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.name ? `${a.code} — ${a.name}` : a.code}
+                </option>
+              ))}
+              {/* Keep an existing code selectable even if it's not in the
+                  register (e.g. an older scraped value). */}
+              {approval?.authorityCode &&
+              !authorities.some((a) => a.code === approval.authorityCode) ? (
+                <option value={approval.authorityCode}>
+                  {approval.authorityCode}
+                </option>
+              ) : null}
+            </select>
           </Field>
           <Field label="Reference">
             <Input

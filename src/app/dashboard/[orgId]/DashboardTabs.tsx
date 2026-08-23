@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { DashboardOrg } from "@/lib/dashboard";
+import type { AuthorityOption, DashboardOrg } from "@/lib/dashboard";
 import { ProfileForm } from "./ProfileForm";
 import { ContactsEditor } from "./ContactsEditor";
 import { ApprovalsPanel, StationsPanel } from "./RegulatorySections";
@@ -87,7 +87,13 @@ function isTabKey(v: string): v is TabKey {
   return TABS.some((t) => t.key === v);
 }
 
-export function DashboardTabs({ org }: { org: DashboardOrg }) {
+export function DashboardTabs({
+  org,
+  authorities,
+}: {
+  org: DashboardOrg;
+  authorities: AuthorityOption[];
+}) {
   const [active, setActive] = useState<TabKey>("profile");
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -168,7 +174,7 @@ export function DashboardTabs({ org }: { org: DashboardOrg }) {
             hidden={t.key !== active}
           >
             <SectionHeading title={t.title} note={t.note} publish={t.publish} />
-            <PanelBody tab={t.key} org={org} />
+            <PanelBody tab={t.key} org={org} authorities={authorities} />
           </section>
         ))}
       </div>
@@ -176,14 +182,22 @@ export function DashboardTabs({ org }: { org: DashboardOrg }) {
   );
 }
 
-function PanelBody({ tab, org }: { tab: TabKey; org: DashboardOrg }) {
+function PanelBody({
+  tab,
+  org,
+  authorities,
+}: {
+  tab: TabKey;
+  org: DashboardOrg;
+  authorities: AuthorityOption[];
+}) {
   switch (tab) {
     case "profile":
       return <ProfileForm org={org} />;
     case "contacts":
       return <ContactsEditor org={org} />;
     case "approvals":
-      return <ApprovalsPanel org={org} />;
+      return <ApprovalsPanel org={org} authorities={authorities} />;
     case "scope":
       return <StationScopeEditor org={org} />;
     case "stations":

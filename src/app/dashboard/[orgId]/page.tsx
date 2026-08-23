@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getDashboardOrg } from "@/lib/dashboard";
+import { getAuthorities, getDashboardOrg } from "@/lib/dashboard";
 import { ForbiddenError, requireMember, requireUser } from "@/lib/guards";
 import { Alert } from "@/components/ui/Form";
 import { DashboardTabs } from "./DashboardTabs";
@@ -33,7 +33,10 @@ export default async function OrganisationDashboard({
     throw err;
   }
 
-  const org = await getDashboardOrg(params.orgId);
+  const [org, authorities] = await Promise.all([
+    getDashboardOrg(params.orgId),
+    getAuthorities(),
+  ]);
   if (!org) notFound();
 
   return (
@@ -51,7 +54,7 @@ export default async function OrganisationDashboard({
         </Alert>
       ) : null}
 
-      <DashboardTabs org={org} />
+      <DashboardTabs org={org} authorities={authorities} />
     </div>
   );
 }

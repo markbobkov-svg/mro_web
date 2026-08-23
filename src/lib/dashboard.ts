@@ -232,6 +232,29 @@ export interface DashboardOrg {
 }
 
 /** Everything the dashboard shows for one organisation. */
+export interface AuthorityOption {
+  code: string;
+  name: string | null;
+}
+
+/**
+ * The authorities register (EASA, FAA, UK-CAA, …) for the approval dropdown in
+ * the dashboard — so an organisation picks a real authority code rather than
+ * free-typing one. EASA sorts first, the rest by code.
+ */
+export async function getAuthorities(): Promise<AuthorityOption[]> {
+  const supabase = getAdminSupabase();
+  const { data, error } = await supabase.from("authorities").select("code, name");
+  if (error || !data) return [];
+  const rows = (data as { code: string | null; name: string | null }[])
+    .filter((a) => a.code)
+    .map((a) => ({ code: String(a.code), name: a.name ?? null }));
+  rows.sort((a, b) =>
+    a.code === "EASA" ? -1 : b.code === "EASA" ? 1 : a.code.localeCompare(b.code),
+  );
+  return rows;
+}
+
 export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | null> {
   const supabase = getAdminSupabase();
 

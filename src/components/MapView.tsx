@@ -432,26 +432,44 @@ export default function MapView({
   };
 
   // Rendered in two spots: above the search bar on mobile, bottom-left on ≥sm.
-  // The mobile line sits directly under the search bar where width is tight,
-  // so it uses APT/ORG/STA; the ≥sm line has the room to spell them out.
+  // The mobile line sits where width is tight, so it abbreviates (APT/ORG/STA);
+  // the ≥sm line has the room to spell them out.
+  //
+  // A scoped MRO sees only its own network, so the airport and organisation
+  // tallies say little — it is one organisation (itself) across the airports it
+  // staffs. Its counter keeps the one figure that means something: the number
+  // of stations. With the other two gone the mobile line has room to spell out
+  // STATIONS in full.
   const hasCounts = !loadError && markers.length > 0;
   const countsFull = hasCounts ? (
-    <p className="text-[11px] uppercase tracking-wide2 text-white/45">
-      <span className="text-white/80">{markers.length}</span> airports
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{organisationCount}</span> organisations
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{totalStations}</span> stations
-    </p>
+    scoped ? (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{totalStations}</span> stations
+      </p>
+    ) : (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{markers.length}</span> airports
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{organisationCount}</span> organisations
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{totalStations}</span> stations
+      </p>
+    )
   ) : null;
   const countsCompact = hasCounts ? (
-    <p className="text-[11px] uppercase tracking-wide2 text-white/45">
-      <span className="text-white/80">{markers.length}</span> APT
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{organisationCount}</span> ORG
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{totalStations}</span> STA
-    </p>
+    scoped ? (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{totalStations}</span> STATIONS
+      </p>
+    ) : (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{markers.length}</span> APT
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{organisationCount}</span> ORG
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{totalStations}</span> STA
+      </p>
+    )
   ) : null;
 
   // A quiet line for a scoped MRO, so a map framed on its own handful of pins
@@ -502,10 +520,12 @@ export default function MapView({
         </div>
       )}
 
-      {/* Search. Mobile: pinned to the bottom of the screen, within thumb reach
-          (and lifted when the keyboard opens). ≥sm: centred along the top,
-          between the brand (left) and the Dashboard button (right) — the width
-          keeps a 12rem gutter each side so it never collides with either. */}
+      {/* Search + mobile counts. Mobile: pinned to the bottom of the screen,
+          within thumb reach (and lifted when the keyboard opens). ≥sm: centred
+          along the top, between the brand (left) and the Dashboard button
+          (right) — the width keeps a 12rem gutter each side so it never collides
+          with either. The search box itself is dropped for a scoped MRO (see
+          below); the counts line beneath it stays. */}
       <div
         className={`pointer-events-none absolute inset-x-0 bottom-0 z-[500] p-5 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-0 sm:w-[calc(100vw_-_24rem)] sm:max-w-md sm:-translate-x-1/2 sm:p-6 ${
           // the panel is full-screen on mobile — don't let the bar glow through it
@@ -515,7 +535,9 @@ export default function MapView({
           keyboardInset ? { paddingBottom: keyboardInset + 12 } : undefined
         }
       >
-        {/* search box */}
+        {/* Search box — hidden for a scoped MRO, which has nothing to search:
+            it only ever sees its own stations. The counts line below remains. */}
+        {!scoped && (
         <div className="pointer-events-auto relative">
           <div className="flex items-center gap-2 rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-xl transition focus-within:border-accent/60 focus-within:bg-[#141414]/60">
             <svg
@@ -686,9 +708,11 @@ export default function MapView({
             </div>
           )}
         </div>
+        )}
 
-        {/* stats sit under the search bar on mobile; the suggestions open
-            upwards from the bar, so they never cover this line */}
+        {/* stats sit under the search bar on mobile (below the search box when
+            it's shown; the only thing here for a scoped MRO). The suggestions
+            open upwards from the bar, so they never cover this line. */}
         {(countsCompact || scopeNote) && (
           <div className="mt-2 select-none px-0.5 sm:hidden">
             {countsCompact}

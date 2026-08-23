@@ -490,19 +490,9 @@ export default function MapView({
       {/* bottom scrim — mobile only, where the search bar lives */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[400] h-36 bg-gradient-to-t from-black/85 to-transparent sm:hidden" />
 
-      {/* Brand + search. ≥sm: stacked in the top-left corner. Mobile: the brand
-          stays up top and the search bar is pinned to the bottom of the screen,
-          within thumb reach (and lifted when the keyboard opens). */}
-      <div
-        className={`pointer-events-none absolute inset-0 z-[500] flex-col p-5 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] sm:inset-auto sm:left-0 sm:top-0 sm:flex sm:w-full sm:max-w-md sm:gap-4 sm:p-6 ${
-          // the panel is full-screen on mobile — don't let the bar glow through it
-          activeId ? "hidden" : "flex"
-        }`}
-        style={
-          keyboardInset ? { paddingBottom: keyboardInset + 12 } : undefined
-        }
-      >
-        <div className="select-none">
+      {/* Brand — pinned to the top-left corner on every screen. */}
+      {!activeId && (
+        <div className="pointer-events-none absolute left-0 top-0 z-[500] select-none p-5 sm:p-6">
           <h1 className="text-lg font-normal tracking-brand text-white sm:text-xl">
             ONE<span className="text-accent-bright">4</span>FIVE
           </h1>
@@ -510,10 +500,21 @@ export default function MapView({
             Part-145 · MRO · Europe
           </p>
         </div>
+      )}
 
-        {/* pushes the search bar to the bottom edge on mobile only */}
-        <div className="flex-1 sm:hidden" />
-
+      {/* Search. Mobile: pinned to the bottom of the screen, within thumb reach
+          (and lifted when the keyboard opens). ≥sm: centred along the top,
+          between the brand (left) and the Dashboard button (right) — the width
+          keeps a 12rem gutter each side so it never collides with either. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 z-[500] p-5 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-0 sm:w-[calc(100vw_-_24rem)] sm:max-w-md sm:-translate-x-1/2 sm:p-6 ${
+          // the panel is full-screen on mobile — don't let the bar glow through it
+          activeId ? "hidden" : "block"
+        }`}
+        style={
+          keyboardInset ? { paddingBottom: keyboardInset + 12 } : undefined
+        }
+      >
         {/* search box */}
         <div className="pointer-events-auto relative">
           <div className="flex items-center gap-2 rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-xl transition focus-within:border-accent/60 focus-within:bg-[#141414]/60">

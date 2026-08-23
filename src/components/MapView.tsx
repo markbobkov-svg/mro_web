@@ -26,23 +26,56 @@ interface Props {
 
 type Engine = "vector" | "raster";
 
+/** Vertical slack (px) added above and below a marked horizontal scroller. A
+ *  drag that starts within this margin of the (thin) tab strip still counts as
+ *  scrolling it, so the strip is a forgiving target rather than a hairline you
+ *  must hit exactly. */
+const HSCROLL_SLOP = 32;
+
+/** Does this element scroll horizontally and still have somewhere to scroll? */
+function isHorizontalScroller(el: Element): boolean {
+  if (el.scrollWidth <= el.clientWidth) return false; // nothing to scroll here
+  const ox = el.ownerDocument.defaultView?.getComputedStyle(el).overflowX;
+  return ox === "auto" || ox === "scroll";
+}
+
 /**
- * Does this touch land inside a strip that scrolls horizontally *and* has
- * somewhere left to scroll? Walks up from the target for an element whose
- * content is wider than its box and whose computed overflow-x is auto/scroll.
+ * Should this touch be left to a nested horizontal scroller rather than arm the
+ * drawer's swipe-to-close? The drawer reads horizontal drags, and so does a
+ * horizontal scroller (the dashboard tab bar, a wide table) — when a drag
+ * begins on one it belongs to that scroller, so the drawer yields and never
+ * arms its close-swipe, letting the strip scroll natively.
  *
- * The dashboard drawer's swipe-to-close reads horizontal drags; a nested
- * horizontal scroller (the dashboard tab bar, a wide table) reads the same
- * gesture. When a drag starts inside one, it belongs to that scroller — so the
- * drawer yields and never arms its close-swipe, letting the strip scroll
- * natively instead of being hijacked into a drag-to-dismiss.
+ * True when the finger either lands directly inside a horizontal scroller, or
+ * falls within a small vertical margin of a marked one (`[data-drawer-hscroll]`
+ * — the tab bar). The margin is what makes the zone usable: that strip is only
+ * ~44px tall, so without slack you had to hit the hairline exactly or the
+ * drawer stole the drag. `x`/`y` are the touch point in the iframe's own
+ * viewport, matching the marked elements' getBoundingClientRect.
  */
-function startsInHorizontalScroller(target: EventTarget | null): boolean {
-  let el = target instanceof Element ? target : null;
-  for (; el; el = el.parentElement) {
-    if (el.scrollWidth <= el.clientWidth) continue; // nothing to scroll here
-    const ox = el.ownerDocument.defaultView?.getComputedStyle(el).overflowX;
-    if (ox === "auto" || ox === "scroll") return true;
+function startsInHorizontalScroller(
+  target: EventTarget | null,
+  doc: Document,
+  x: number,
+  y: number,
+): boolean {
+  // Direct hit — the finger is inside a horizontal scroller.
+  for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
+    if (isHorizontalScroller(el)) return true;
+  }
+  // Near miss — the finger is just above or below a marked scroller. Widens the
+  // thin tab strip into an easy target without changing how it looks.
+  for (const el of Array.from(doc.querySelectorAll("[data-drawer-hscroll]"))) {
+    if (!isHorizontalScroller(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (
+      x >= r.left &&
+      x <= r.right &&
+      y >= r.top - HSCROLL_SLOP &&
+      y <= r.bottom + HSCROLL_SLOP
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -380,10 +413,12 @@ export default function MapView({
       doc.addEventListener("touchstart", (ev) => {
         const t = (ev as TouchEvent).touches[0];
         if (!t) return;
-        // A drag that starts on a horizontally-scrollable strip (the dashboard
-        // tab bar, a wide table) belongs to that strip — don't arm the close-
-        // swipe, or it would hijack the drag and the tabs could never scroll.
-        if (startsInHorizontalScroller(ev.target)) return;
+        // A drag that starts on (or just above/below) a horizontally-scrollable
+        // strip — the dashboard tab bar, a wide table — belongs to that strip;
+        // don't arm the close-swipe, or it would hijack the drag and the tabs
+        // could never scroll. Hit-tested in the iframe's own viewport (raw
+        // clientX/Y), which is where the marked elements' rects live too.
+        if (startsInHorizontalScroller(ev.target, doc, t.clientX, t.clientY)) return;
         beginSwipe(t.clientX + panelLeft(), t.clientY);
       }, passive);
       // touchmove is non-passive so that, once the gesture locks into a

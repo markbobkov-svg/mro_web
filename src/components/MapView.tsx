@@ -712,7 +712,7 @@ export default function MapView({
               text-[10px] uppercase tracking-wide2 text-white
               [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.9))] transition-colors
               hover:bg-clip-text hover:text-transparent
-              hover:[background-image:repeating-linear-gradient(45deg,#fff_0,#fff_1px,transparent_1px,transparent_2px)]"
+              hover:[background-image:repeating-linear-gradient(45deg,#fff_0,#fff_0.5px,transparent_0.5px,transparent_1px)]"
           >
             Dashboard
           </button>

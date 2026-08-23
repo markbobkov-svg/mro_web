@@ -22,21 +22,17 @@ export default async function Home() {
   // counts or per-organisation details, and the backdrop map is non-interactive.
   const user = await getCurrentUser();
   if (!user) {
-    // Dots are the airport positions; the count is the *whole* register (1,600+),
-    // not just the ~700 orgs with a mapped station — see getPublicStats.
-    let dots: [number, number][] = [];
+    // The landing's map backdrop is a static image with the airport dots baked
+    // in, so it needs no per-request marker query — just the headline count,
+    // which is the *whole* register (1,600+), not only the orgs with a mapped
+    // station (see getPublicStats).
     let organisationCount = 0;
     try {
-      const [markerData, stats] = await Promise.all([
-        getAirportMarkers(),
-        getPublicStats(),
-      ]);
-      dots = markerData.markers.map((m) => m.coordinates);
-      organisationCount = stats.organisationCount;
+      organisationCount = (await getPublicStats()).organisationCount;
     } catch {
-      // Dots and the count are nice-to-have; never block the front door.
+      // The count is nice-to-have; never block the front door.
     }
-    return <Landing organisationCount={organisationCount} dots={dots} />;
+    return <Landing organisationCount={organisationCount} />;
   }
 
   // A signed-in MRO sees only its own network: the airports where it has a

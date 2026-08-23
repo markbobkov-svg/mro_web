@@ -26,6 +26,60 @@ interface Props {
 
 type Engine = "vector" | "raster";
 
+/** Vertical slack (px) added above and below a marked horizontal scroller. A
+ *  drag that starts within this margin of the (thin) tab strip still counts as
+ *  scrolling it, so the strip is a forgiving target rather than a hairline you
+ *  must hit exactly. */
+const HSCROLL_SLOP = 32;
+
+/** Does this element scroll horizontally and still have somewhere to scroll? */
+function isHorizontalScroller(el: Element): boolean {
+  if (el.scrollWidth <= el.clientWidth) return false; // nothing to scroll here
+  const ox = el.ownerDocument.defaultView?.getComputedStyle(el).overflowX;
+  return ox === "auto" || ox === "scroll";
+}
+
+/**
+ * Should this touch be left to a nested horizontal scroller rather than arm the
+ * drawer's swipe-to-close? The drawer reads horizontal drags, and so does a
+ * horizontal scroller (the dashboard tab bar, a wide table) — when a drag
+ * begins on one it belongs to that scroller, so the drawer yields and never
+ * arms its close-swipe, letting the strip scroll natively.
+ *
+ * True when the finger either lands directly inside a horizontal scroller, or
+ * falls within a small vertical margin of a marked one (`[data-drawer-hscroll]`
+ * — the tab bar). The margin is what makes the zone usable: that strip is only
+ * ~44px tall, so without slack you had to hit the hairline exactly or the
+ * drawer stole the drag. `x`/`y` are the touch point in the iframe's own
+ * viewport, matching the marked elements' getBoundingClientRect.
+ */
+function startsInHorizontalScroller(
+  target: EventTarget | null,
+  doc: Document,
+  x: number,
+  y: number,
+): boolean {
+  // Direct hit — the finger is inside a horizontal scroller.
+  for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
+    if (isHorizontalScroller(el)) return true;
+  }
+  // Near miss — the finger is just above or below a marked scroller. Widens the
+  // thin tab strip into an easy target without changing how it looks.
+  for (const el of Array.from(doc.querySelectorAll("[data-drawer-hscroll]"))) {
+    if (!isHorizontalScroller(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (
+      x >= r.left &&
+      x <= r.right &&
+      y >= r.top - HSCROLL_SLOP &&
+      y <= r.bottom + HSCROLL_SLOP
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export default function MapView({
   markers,
   organisationCount,
@@ -39,12 +93,21 @@ export default function MapView({
   const activeIdRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const drawerPanelRef = useRef<HTMLDivElement>(null);
+  const dashboardIframeRef = useRef<HTMLIFrameElement>(null);
+  // Live state of a swipe-to-close drag on the dashboard drawer (touch only).
+  const swipe = useRef<{ x: number; y: number; w: number; axis: "" | "h" | "v"; dx: number } | null>(null);
 
   const [engine, setEngine] = useState<Engine | null>(null);
   // The dashboard opens in a right slide-in drawer (an iframe of the user's own
   // dashboard); mounted lazily on first open, then kept so it doesn't reload.
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [dashboardMounted, setDashboardMounted] = useState(false);
+  // Rightward drag offset (px) while swiping the drawer closed; null when idle.
+  const [swipeX, setSwipeX] = useState<number | null>(null);
+  // The iframe paints its own dark theme only once loaded; until then a dark
+  // veil hides the browser's default white canvas. True until the first load.
+  const [iframeLoading, setIframeLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AirportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -264,6 +327,132 @@ export default function MapView({
     return () => window.removeEventListener("keydown", onKey);
   }, [dashboardOpen]);
 
+  // Swipe-to-close for the drawer (touch), working anywhere on the panel. The
+  // panel is mostly a same-origin <iframe>, and touches that start inside an
+  // iframe are delivered to *its* document and never bubble out to us — so we
+  // feed one gesture engine from two places: the header bar (ours) and, attached
+  // on load, the iframe's own document.
+  //
+  // The engine works in top-viewport X. From the header that's just clientX.
+  // From inside the iframe it is not: as the panel follows the finger, the
+  // iframe's viewport slides with it, so its clientX shrinks by exactly the
+  // panel's offset — feed that back raw and the panel judders. We convert by
+  // adding the panel's live left edge (getBoundingClientRect already includes
+  // the drag transform): clientX-in-iframe + panelLeft is the finger's true
+  // viewport X, steady however far the panel has travelled. `touch-action: none`
+  // on the header stops the browser scrolling there; inside the iframe we stay
+  // passive so the dashboard keeps scrolling vertically, and the axis lock
+  // ignores those vertical drags.
+  const beginSwipe = useCallback((px: number, py: number) => {
+    swipe.current = {
+      x: px,
+      y: py,
+      w: drawerPanelRef.current?.offsetWidth ?? window.innerWidth,
+      axis: "",
+      dx: 0,
+    };
+  }, []);
+
+  const moveSwipe = useCallback((px: number, py: number) => {
+    const s = swipe.current;
+    if (!s) return;
+    const dx = px - s.x;
+    const dy = py - s.y;
+    // Lock the axis once the finger has clearly moved, so a vertical scroll (or
+    // a tap on a header button) is never mistaken for a close gesture.
+    if (s.axis === "") {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+    }
+    if (s.axis !== "h") return;
+    s.dx = Math.max(0, dx); // only a rightward pull dismisses the right drawer
+    setSwipeX(s.dx);
+  }, []);
+
+  const endSwipe = useCallback(() => {
+    const s = swipe.current;
+    swipe.current = null;
+    // Past a third of the panel's width (capped) it dismisses; otherwise the
+    // panel springs back to open as the inline transform is dropped.
+    if (s && s.axis === "h" && s.dx > Math.min(s.w * 0.33, 140)) {
+      setDashboardOpen(false);
+    }
+    setSwipeX(null);
+  }, []);
+
+  // Parent-document (header handle) touch handlers — clientX is already the
+  // finger's viewport X here, since the header lives in the top document.
+  const onSwipeStart = useCallback(
+    (e: React.TouchEvent) => beginSwipe(e.touches[0].clientX, e.touches[0].clientY),
+    [beginSwipe],
+  );
+  const onSwipeMove = useCallback(
+    (e: React.TouchEvent) => moveSwipe(e.touches[0].clientX, e.touches[0].clientY),
+    [moveSwipe],
+  );
+
+  // Wire the same gesture into the iframe's own document, so a swipe that starts
+  // over the dashboard content closes the drawer too. It's same-origin, so we
+  // can reach in. We use a native `load` listener (React's onLoad on an iframe
+  // is unreliable) plus an immediate pass for the case where it already loaded
+  // before this effect ran; a per-document flag stops double-wiring, and the
+  // listeners die with the document on navigation/unmount. Passive throughout,
+  // so vertical scrolling inside the dashboard is untouched.
+  useEffect(() => {
+    if (!dashboardMounted) return;
+    const iframe = dashboardIframeRef.current;
+    if (!iframe) return;
+    const passive = { passive: true } as const;
+    // clientX inside the iframe is relative to the iframe's (moving) viewport;
+    // add the panel's live left edge to recover the finger's top-viewport X.
+    const panelLeft = () => drawerPanelRef.current?.getBoundingClientRect().left ?? 0;
+    const wire = () => {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      // Mark the framed page embedded from here, as a fallback. The dashboard
+      // detects framing itself (an inline script adds html.embedded, which hides
+      // its own in-app header so the drawer's isn't doubled, and reveals the
+      // top/bottom fades). But that lives entirely inside the iframe; if it ever
+      // fails to run — a redirected first load, a stricter host — the header
+      // returns and the fades vanish. We're same-origin, so set it from the
+      // drawer too. Idempotent, and the load veil covers the iframe until this
+      // runs, so there's no flash of the un-embedded chrome.
+      doc.documentElement.classList.add("embedded");
+      if ((doc as unknown as { __o4fWired?: boolean }).__o4fWired) return;
+      (doc as unknown as { __o4fWired?: boolean }).__o4fWired = true;
+      doc.addEventListener("touchstart", (ev) => {
+        const t = (ev as TouchEvent).touches[0];
+        if (!t) return;
+        // A drag that starts on (or just above/below) a horizontally-scrollable
+        // strip — the dashboard tab bar, a wide table — belongs to that strip;
+        // don't arm the close-swipe, or it would hijack the drag and the tabs
+        // could never scroll. Hit-tested in the iframe's own viewport (raw
+        // clientX/Y), which is where the marked elements' rects live too.
+        if (startsInHorizontalScroller(ev.target, doc, t.clientX, t.clientY)) return;
+        beginSwipe(t.clientX + panelLeft(), t.clientY);
+      }, passive);
+      // touchmove is non-passive so that, once the gesture locks into a
+      // horizontal close-drag, we can preventDefault to freeze the dashboard's
+      // own scroll underneath it. A vertical gesture never locks to "h", so
+      // scrolling the dashboard stays completely normal.
+      doc.addEventListener("touchmove", (ev) => {
+        const t = (ev as TouchEvent).touches[0];
+        if (!t) return;
+        moveSwipe(t.clientX + panelLeft(), t.clientY);
+        if (swipe.current?.axis === "h") ev.preventDefault();
+      }, { passive: false });
+      doc.addEventListener("touchend", endSwipe, passive);
+      doc.addEventListener("touchcancel", endSwipe, passive);
+    };
+    const onLoad = () => {
+      setIframeLoading(false); // drop the veil once the dashboard has painted
+      wire(); // (re-)wire the swipe gesture onto the freshly loaded document
+    };
+    wire(); // already loaded before the effect ran
+    iframe.addEventListener("load", onLoad); // and re-wire after in-iframe nav
+    return () => iframe.removeEventListener("load", onLoad);
+  }, [dashboardMounted, beginSwipe, moveSwipe, endSwipe]);
+
   const activeMarker = activeId
     ? markers.find((m) => m.id === activeId) ?? null
     : null;
@@ -314,26 +503,44 @@ export default function MapView({
   };
 
   // Rendered in two spots: above the search bar on mobile, bottom-left on ≥sm.
-  // The mobile line sits directly under the search bar where width is tight,
-  // so it uses APT/ORG/STA; the ≥sm line has the room to spell them out.
+  // The mobile line sits where width is tight, so it abbreviates (APT/ORG/STA);
+  // the ≥sm line has the room to spell them out.
+  //
+  // A scoped MRO sees only its own network, so the airport and organisation
+  // tallies say little — it is one organisation (itself) across the airports it
+  // staffs. Its counter keeps the one figure that means something: the number
+  // of stations. With the other two gone the mobile line has room to spell out
+  // STATIONS in full.
   const hasCounts = !loadError && markers.length > 0;
   const countsFull = hasCounts ? (
-    <p className="text-[11px] uppercase tracking-wide2 text-white/45">
-      <span className="text-white/80">{markers.length}</span> airports
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{organisationCount}</span> organisations
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{totalStations}</span> stations
-    </p>
+    scoped ? (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{totalStations}</span> stations
+      </p>
+    ) : (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{markers.length}</span> airports
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{organisationCount}</span> organisations
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{totalStations}</span> stations
+      </p>
+    )
   ) : null;
   const countsCompact = hasCounts ? (
-    <p className="text-[11px] uppercase tracking-wide2 text-white/45">
-      <span className="text-white/80">{markers.length}</span> APT
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{organisationCount}</span> ORG
-      <span className="mx-2 text-white/20">/</span>
-      <span className="text-white/80">{totalStations}</span> STA
-    </p>
+    scoped ? (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{totalStations}</span> STATIONS
+      </p>
+    ) : (
+      <p className="text-[11px] uppercase tracking-wide2 text-white/45">
+        <span className="text-white/80">{markers.length}</span> APT
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{organisationCount}</span> ORG
+        <span className="mx-2 text-white/20">/</span>
+        <span className="text-white/80">{totalStations}</span> STA
+      </p>
+    )
   ) : null;
 
   // A quiet line for a scoped MRO, so a map framed on its own handful of pins
@@ -372,19 +579,9 @@ export default function MapView({
       {/* bottom scrim — mobile only, where the search bar lives */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[400] h-36 bg-gradient-to-t from-black/85 to-transparent sm:hidden" />
 
-      {/* Brand + search. ≥sm: stacked in the top-left corner. Mobile: the brand
-          stays up top and the search bar is pinned to the bottom of the screen,
-          within thumb reach (and lifted when the keyboard opens). */}
-      <div
-        className={`pointer-events-none absolute inset-0 z-[500] flex-col p-5 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] sm:inset-auto sm:left-0 sm:top-0 sm:flex sm:w-full sm:max-w-md sm:gap-4 sm:p-6 ${
-          // the panel is full-screen on mobile — don't let the bar glow through it
-          activeId ? "hidden" : "flex"
-        }`}
-        style={
-          keyboardInset ? { paddingBottom: keyboardInset + 12 } : undefined
-        }
-      >
-        <div className="select-none">
+      {/* Brand — pinned to the top-left corner on every screen. */}
+      {!activeId && (
+        <div className="pointer-events-none absolute left-0 top-0 z-[500] select-none p-5 sm:p-6">
           <h1 className="text-lg font-normal tracking-brand text-white sm:text-xl">
             ONE<span className="text-accent-bright">4</span>FIVE
           </h1>
@@ -392,11 +589,26 @@ export default function MapView({
             Part-145 · MRO · Europe
           </p>
         </div>
+      )}
 
-        {/* pushes the search bar to the bottom edge on mobile only */}
-        <div className="flex-1 sm:hidden" />
-
-        {/* search box */}
+      {/* Search + mobile counts. Mobile: pinned to the bottom of the screen,
+          within thumb reach (and lifted when the keyboard opens). ≥sm: centred
+          along the top, between the brand (left) and the Dashboard button
+          (right) — the width keeps a 12rem gutter each side so it never collides
+          with either. The search box itself is dropped for a scoped MRO (see
+          below); the counts line beneath it stays. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 z-[500] p-5 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-0 sm:w-[calc(100vw_-_24rem)] sm:max-w-md sm:-translate-x-1/2 sm:p-6 ${
+          // the panel is full-screen on mobile — don't let the bar glow through it
+          activeId ? "hidden" : "block"
+        }`}
+        style={
+          keyboardInset ? { paddingBottom: keyboardInset + 12 } : undefined
+        }
+      >
+        {/* Search box — hidden for a scoped MRO, which has nothing to search:
+            it only ever sees its own stations. The counts line below remains. */}
+        {!scoped && (
         <div className="pointer-events-auto relative">
           <div className="flex items-center gap-2 rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-xl transition focus-within:border-accent/60 focus-within:bg-[#141414]/60">
             <svg
@@ -567,9 +779,11 @@ export default function MapView({
             </div>
           )}
         </div>
+        )}
 
-        {/* stats sit under the search bar on mobile; the suggestions open
-            upwards from the bar, so they never cover this line */}
+        {/* stats sit under the search bar on mobile (below the search box when
+            it's shown; the only thing here for a scoped MRO). The suggestions
+            open upwards from the bar, so they never cover this line. */}
         {(countsCompact || scopeNote) && (
           <div className="mt-2 select-none px-0.5 sm:hidden">
             {countsCompact}
@@ -578,29 +792,23 @@ export default function MapView({
         )}
       </div>
 
-      {/* top-right account chrome: Dashboard (opens a right drawer) + Logout.
-          Hidden while an airport panel is open, like the brand/search block. */}
+      {/* top-right account chrome: Dashboard (opens a right drawer). Logout now
+          lives at the foot of that drawer, not here. Hidden while an airport
+          panel is open, like the brand/search block. */}
       {!activeId && (
         <div className="absolute right-0 top-0 z-[500] flex items-center gap-2 p-5 sm:p-6">
+          {/* Dashboard: a plain white outline — transparent fill, white border
+              and text, with a subtle white-tint hover. */}
           <button
             type="button"
             onClick={openDashboard}
-            className="pointer-events-auto rounded-[2px] border border-accent/40 bg-accent/15 px-3 py-1.5
-              text-[10px] uppercase tracking-wide2 text-accent-bright shadow-lg shadow-black/20
-              backdrop-blur-xl transition hover:bg-accent/25 hover:text-white"
+            className="pointer-events-auto rounded-[2px] border border-white/40 px-3 py-1.5
+              text-[10px] uppercase tracking-wide2 text-white
+              [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.9))] transition
+              hover:border-white/70 hover:bg-white/10"
           >
             Dashboard
           </button>
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="pointer-events-auto rounded-[2px] border border-white/10 bg-[#141414]/45 px-3 py-1.5
-                text-[10px] uppercase tracking-wide2 text-white/55 shadow-lg shadow-black/20
-                backdrop-blur-xl transition hover:bg-white/10 hover:text-white"
-            >
-              Logout
-            </button>
-          </form>
         </div>
       )}
 
@@ -651,42 +859,85 @@ export default function MapView({
           onClick={() => setDashboardOpen(false)}
         />
         <div
+          ref={drawerPanelRef}
           className={`absolute right-0 top-0 flex h-full w-full max-w-[720px] transform flex-col
-            border-l border-white/10 bg-black shadow-2xl transition-transform duration-300 ${
+            overflow-hidden border-l border-white/10 bg-black shadow-2xl transition-transform duration-300 ${
               dashboardOpen ? "translate-x-0" : "translate-x-full"
             }`}
+          style={
+            swipeX != null
+              ? { transform: `translateX(${swipeX}px)`, transition: "none" }
+              : undefined
+          }
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-2">
+          {/* The header bar is a drag handle (swipe it right to close); the same
+              gesture also works over the dashboard content via the iframe touch
+              listeners wired above. `touch-action: none` keeps the browser from
+              scrolling here. */}
+          <div
+            onTouchStart={onSwipeStart}
+            onTouchMove={onSwipeMove}
+            onTouchEnd={endSwipe}
+            className="flex shrink-0 touch-none select-none items-center justify-between
+              px-4 py-2"
+          >
             <span className="text-[10px] uppercase tracking-wide2 text-white/45">
               Dashboard
             </span>
-            <div className="flex items-center gap-3">
-              <a
-                href={dashboardHref}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[10px] uppercase tracking-wide2 text-white/35 transition hover:text-white/70"
-              >
-                Full page ↗
-              </a>
-              <button
-                type="button"
-                onClick={() => setDashboardOpen(false)}
-                aria-label="Close dashboard"
-                className="rounded-[2px] border border-white/10 px-2 py-1 text-xs leading-none text-white/60
-                  transition hover:bg-white/10 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setDashboardOpen(false)}
+              aria-label="Close dashboard"
+              className="rounded-[2px] border border-white/10 px-2 py-1 text-xs leading-none text-white/60
+                transition hover:bg-white/10 hover:text-white"
+            >
+              ✕
+            </button>
           </div>
           {dashboardMounted && (
-            <iframe
-              src={dashboardHref}
-              title="Dashboard"
-              className="h-full w-full flex-1 border-0 bg-black"
-            />
+            <div className="relative flex-1">
+              <iframe
+                ref={dashboardIframeRef}
+                src={dashboardHref}
+                title="Dashboard"
+                // color-scheme: dark makes the browser paint the iframe's own
+                // loading/blank canvas dark instead of the default white, so
+                // there's no white flash before the dashboard's CSS applies.
+                style={{ colorScheme: "dark" }}
+                className="h-full w-full border-0 bg-black"
+              />
+              {/* Dark veil over the still-loading iframe; fades out on load so
+                  the dashboard appears without a flash. pointer-events-none so it
+                  never blocks the content or the swipe underneath. */}
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-0 flex items-center justify-center
+                  bg-black transition-opacity duration-500 ${
+                    iframeLoading ? "opacity-100" : "opacity-0"
+                  }`}
+              >
+                <span
+                  className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/40"
+                />
+              </div>
+            </div>
           )}
+          {/* Logout sits at the foot of the dashboard drawer. The form submits in
+              the top document (not the iframe), so signing out navigates the
+              whole page to the signed-out landing rather than only the framed
+              dashboard view — which would leave the map behind it stale. */}
+          <div className="flex shrink-0 items-center justify-center px-4 pt-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))]">
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="rounded-[2px] border border-white/10 bg-[#141414]/60 px-4 py-1.5
+                  text-[10px] uppercase tracking-wide2 text-white/55 transition
+                  hover:bg-white/10 hover:text-white"
+              >
+                Logout
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

@@ -76,7 +76,7 @@ export default function AirportPanel({
 
       {/* body */}
       <div className="scroll-thin flex-1 overflow-y-auto px-4 py-4">
-        {loading && <PanelSkeleton />}
+        {loading && <PanelLoading />}
 
         {!loading && error && (
           <div className="mx-2 mt-6 rounded-[2px] border border-red-500/30 bg-red-950/40 p-4 text-sm text-red-200">
@@ -141,23 +141,16 @@ export default function AirportPanel({
   );
 }
 
-function PanelSkeleton() {
+// Matches the dashboard drawer's loading indicator (a centred spinner over a
+// dark surface, see MapView) rather than empty skeleton cards, which read as
+// broken/blank sections while the organisations are still fetching.
+function PanelLoading() {
   return (
-    <div className="flex flex-col gap-3 px-2 pt-2">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="animate-fade-in rounded-[2px] border border-white/5 bg-base-800/60 p-4"
-        >
-          <div className="h-4 w-2/3 rounded-[2px] bg-white/10" />
-          <div className="mt-3 h-3 w-1/3 rounded-[2px] bg-white/5" />
-          <div className="mt-4 flex gap-2">
-            <div className="h-5 w-12 rounded-[2px] bg-white/5" />
-            <div className="h-5 w-12 rounded-[2px] bg-white/5" />
-            <div className="h-5 w-12 rounded-[2px] bg-white/5" />
-          </div>
-        </div>
-      ))}
+    <div className="flex min-h-full items-center justify-center py-16">
+      <span
+        aria-label="Loading"
+        className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/40"
+      />
     </div>
   );
 }

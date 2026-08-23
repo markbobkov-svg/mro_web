@@ -45,6 +45,18 @@ html.embedded [data-app-header] {
   display: none;
 }
 
+/* Top/bottom dark fades over the scrolling dashboard content, like the landing's
+   scrims (see Landing / MapView). Shown only when the dashboard is embedded in
+   the map's drawer — there the drawer draws no header of its own over this area,
+   so the fades sit flush at the top and bottom edges. Hidden on the standalone
+   dashboard, which carries its own sticky header instead. */
+.dash-scrim {
+  display: none;
+}
+html.embedded .dash-scrim {
+  display: block;
+}
+
 /* ---- SpaceX-ish typographic helpers ---- */
 .tracking-brand {
   letter-spacing: 0.28em;
@@ -71,6 +83,40 @@ html.embedded [data-app-header] {
 }
 .scroll-thin::-webkit-scrollbar-thumb:hover {
   background: #2f3947;
+}
+
+/* Scrollable, but with no visible scrollbar — used on the dashboard tab strip,
+   which scrolls horizontally without a bar. */
+.scroll-none {
+  scrollbar-width: none; /* Firefox */
+}
+.scroll-none::-webkit-scrollbar {
+  display: none; /* WebKit/Blink */
+}
+
+/* ---- Autofill ----
+   Chrome and Safari paint autofilled fields with a bright yellow background and
+   dark text, which wrecks the dark, translucent inputs (the frosted landing
+   sign-in, the dashboard forms). An inset box-shadow overpaints that yellow —
+   the one override that also holds on iOS Safari — with a dark field colour,
+   and -webkit-text-fill-color keeps the value in our own light text. The long
+   transitions defer any pre-paint flash of the UA colours. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #e8ecf2;
+  caret-color: #e8ecf2;
+  -webkit-box-shadow: 0 0 0 1000px #11151c inset;
+  box-shadow: 0 0 0 1000px #11151c inset;
+  transition:
+    background-color 600000s 0s,
+    color 600000s 0s;
 }
 
 /* ---- Airport markers ---- */

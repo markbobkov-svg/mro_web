@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { getUserClaims } from "@/lib/dashboard";
-import { getMemberships, requireUser } from "@/lib/guards";
+import { getOrganisationHold, getUserClaims } from "@/lib/dashboard";
+import { requireUser } from "@/lib/guards";
 import { Alert } from "@/components/ui/Form";
 
 export const metadata = { title: "Dashboard — ONE4FIVE" };
@@ -13,32 +14,44 @@ export default async function DashboardHome({
   searchParams: { submitted?: string };
 }) {
   const user = await requireUser();
-  const [memberships, claims] = await Promise.all([
-    getMemberships(user.id),
+
+  // One account, one organisation. A member — owner or editor — goes straight to
+  // its listing; there is no list to pick from any more.
+  const [hold, claims] = await Promise.all([
+    getOrganisationHold(user.id),
     getUserClaims(user.id),
   ]);
+  if (hold.membershipOrgId) redirect(`/dashboard/${hold.membershipOrgId}`);
 
   const pending = claims.filter((c) => c.status === "pending");
   const rejected = claims.filter((c) => c.status === "rejected");
+
+  // The claim button shows only when nothing is in flight: no membership (handled
+  // above) and no claim still pending or already approved.
+  const canClaim = !hold.hasActiveClaim;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-lg font-normal tracking-wide2 text-white">
-            {user.fullName ? `Hello, ${user.fullName}` : "Your organisations"}
+            {user.fullName ? `Hello, ${user.fullName}` : "Your organisation"}
           </h1>
           <p className="mt-1 text-sm text-white/45">
-            Keep your listing on the map accurate.
+            {canClaim
+              ? "Claim your organisation to keep its listing on the map accurate."
+              : "We are reviewing your claim — you will get access as soon as it is approved."}
           </p>
         </div>
-        <Link
-          href="/dashboard/claim"
-          className="rounded-[2px] border border-accent/40 bg-accent/15 px-4 py-2 text-[11px]
-            uppercase tracking-wide2 text-accent-bright transition hover:bg-accent/25"
-        >
-          Claim an organisation
-        </Link>
+        {canClaim ? (
+          <Link
+            href="/dashboard/claim"
+            className="rounded-[2px] border border-accent/40 bg-accent/15 px-4 py-2 text-[11px]
+              uppercase tracking-wide2 text-accent-bright transition hover:bg-accent/25"
+          >
+            Claim an organisation
+          </Link>
+        ) : null}
       </div>
 
       {searchParams.submitted === "1" ? (
@@ -54,45 +67,6 @@ export default async function DashboardHome({
           organisation — the confirmation is what proves the address is yours.
         </Alert>
       ) : null}
-
-      <section>
-        <h2 className="mb-3 text-[10px] uppercase tracking-wide2 text-white/35">
-          Organisations you manage
-        </h2>
-
-        {memberships.length === 0 ? (
-          <div className="rounded-[2px] border border-dashed border-white/10 p-8 text-center">
-            <p className="text-sm text-white/45">
-              You don&rsquo;t manage any organisation yet.
-            </p>
-            <Link
-              href="/dashboard/claim"
-              className="mt-3 inline-block text-sm text-accent transition hover:text-accent-bright"
-            >
-              Find yours and claim it →
-            </Link>
-          </div>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {memberships.map((m) => (
-              <li key={m.organisationId}>
-                <Link
-                  href={`/dashboard/${m.organisationId}`}
-                  className="block rounded-[2px] border border-white/10 bg-[#141414]/60 p-4 transition
-                    hover:border-white/10 hover:bg-white/5"
-                >
-                  <span className="block text-sm font-medium text-white">
-                    {m.organisationName}
-                  </span>
-                  <span className="mt-1 block text-xs uppercase tracking-wide2 text-white/35">
-                    {m.role}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       {pending.length > 0 ? (
         <section>
@@ -145,6 +119,20 @@ export default async function DashboardHome({
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {canClaim && pending.length === 0 && rejected.length === 0 ? (
+        <div className="rounded-[2px] border border-dashed border-white/10 p-8 text-center">
+          <p className="text-sm text-white/45">
+            You don&rsquo;t manage an organisation yet.
+          </p>
+          <Link
+            href="/dashboard/claim"
+            className="mt-3 inline-block text-sm text-accent transition hover:text-accent-bright"
+          >
+            Find yours and claim it →
+          </Link>
+        </div>
       ) : null}
     </div>
   );

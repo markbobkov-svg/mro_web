@@ -202,24 +202,6 @@ function MemberView({
           />
         </div>
       </section>
-
-      <section>
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
-          <div>
-            <p className="text-sm text-white/85">Find a Part-145 MRO</p>
-            <p className="mt-1 text-xs text-white/45">
-              Browse approved maintenance organisations across Europe.
-            </p>
-          </div>
-          <Link
-            href="/"
-            className="rounded-[2px] border border-accent/40 bg-accent/15 px-4 py-2 text-[11px]
-              uppercase tracking-wide2 text-accent-bright transition hover:bg-accent/25"
-          >
-            Open the map
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }

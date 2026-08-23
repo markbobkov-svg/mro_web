@@ -115,7 +115,12 @@ export function DashboardTabs({ org }: { org: DashboardOrg }) {
         <nav
           role="tablist"
           aria-label="Dashboard sections"
-          className="flex gap-1 overflow-x-auto scroll-thin rounded-[2px] border
+          // Marks this strip for the map's dashboard drawer: when shown in that
+          // right slide-in drawer (an iframe), a horizontal drag on — or just
+          // above/below — this bar scrolls the tabs instead of arming the
+          // drawer's swipe-to-close. See startsInHorizontalScroller in MapView.
+          data-drawer-hscroll
+          className="flex gap-1 overflow-x-auto scroll-none rounded-[2px] border
             border-white/10 bg-[#141414]/60 p-1"
         >
           {TABS.map((t) => {

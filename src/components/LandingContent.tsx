@@ -128,14 +128,14 @@ export default function LandingContent({
         >
           OpenStreetMap
         </a>{" "}
-        contributors, rendered with{" "}
+        contributors, rendered by{" "}
         <a
-          href="https://protomaps.com"
+          href="https://carto.com/attributions"
           target="_blank"
           rel="noreferrer"
           className="underline-offset-2 transition hover:text-white/40 hover:underline"
         >
-          Protomaps
+          CARTO
         </a>
         .
       </p>

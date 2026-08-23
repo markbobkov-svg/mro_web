@@ -27,6 +27,11 @@ export interface BasemapProps {
    *  signed-in MRO sees only its own stations, so it lands zoomed on its region
    *  rather than staring at all of Europe. Ignored when there are no markers. */
   fitMarkers?: boolean;
+  /** Passive *backdrop* use (the blurred landing): drop every label (symbol)
+   *  layer and, with them, the glyph + sprite assets. Nobody can read text
+   *  through the blur, so the backdrop paints without a single request to the
+   *  third-party Protomaps asset host — only the tiles load. Defaults to false. */
+  minimal?: boolean;
 }
 
 /** True if the browser can create a WebGL context (needed for the vector map). */
@@ -235,3 +240,49 @@ export function markerBounds(
 export const FIT_MAX_ZOOM = 9;
 /** Padding (px) kept around the fitted stations so pins don't touch the edges. */
 export const FIT_PADDING = 72;
+
+// --- Basemap asset URLs (env-overridable) ------------------------------------
+// Single source of truth for where the vector map's bytes come from, shared by
+// the map engine (VectorBasemap) and the resource-hint preconnects in the root
+// layout, so the two can never drift. All three are overridable via env so they
+// can be repointed without a code change.
+
+// PMTiles vector tiles. The browser reads byte ranges straight from our R2
+// bucket (its CORS policy allows ranged GETs from our origins), which drops a
+// serverless hop per tile and lets Cloudflare's CDN serve the ranges.
+// NOTE: r2.dev is rate limited by Cloudflare and documented as development-only;
+// for production point this at a custom domain on the bucket via
+// NEXT_PUBLIC_PMTILES_URL (e.g. https://tiles.one4five.tech/europe-z13.pmtiles).
+export const PMTILES_URL =
+  process.env.NEXT_PUBLIC_PMTILES_URL ??
+  "https://pub-8dfd157e131f4ce29bfa353f4c095e5a.r2.dev/europe-z13.pmtiles";
+
+// Fonts (glyphs) + sprites default to Protomaps' own GitHub-hosted assets, both
+// overridable so they can be mirrored to our R2 alongside the tiles — leaning on
+// someone else's GitHub Pages in production is a reliability risk (rate limits,
+// path changes), not a licensing one. Mirror once, then set these. The blurred
+// landing backdrop drops labels and so fetches neither — see VectorBasemap's
+// `minimal` path.
+export const GLYPHS_URL =
+  process.env.NEXT_PUBLIC_GLYPHS_URL ??
+  "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
+export const SPRITE_URL =
+  process.env.NEXT_PUBLIC_SPRITE_URL ??
+  "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
+
+/**
+ * The distinct origins the vector map fetches from, for `<link rel="preconnect">`.
+ * Warming these while the page's JS is still downloading means MapLibre's first
+ * tile and font requests don't each stall on a fresh DNS + TLS handshake.
+ */
+export function mapAssetOrigins(): string[] {
+  const origins = new Set<string>();
+  for (const url of [PMTILES_URL, GLYPHS_URL, SPRITE_URL]) {
+    try {
+      origins.add(new URL(url).origin);
+    } catch {
+      // A malformed override just yields no hint for it — never fatal.
+    }
+  }
+  return [...origins];
+}

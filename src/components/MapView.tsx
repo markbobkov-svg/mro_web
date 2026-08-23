@@ -708,8 +708,8 @@ export default function MapView({
             type="button"
             onClick={openDashboard}
             className="pointer-events-auto relative px-3 py-1.5
-              text-[10px] uppercase tracking-wide2 text-white shadow-lg shadow-black/20
-              backdrop-blur-xl transition hover:bg-white/10
+              text-[10px] uppercase tracking-wide2 text-white
+              [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.9))] transition
               before:pointer-events-none before:absolute before:left-0 before:top-0 before:h-2 before:w-2
               before:border-l before:border-t before:border-white/60 before:content-['']
               after:pointer-events-none after:absolute after:bottom-0 after:right-0 after:h-2 after:w-2

@@ -705,9 +705,9 @@ export default function MapView({
           <button
             type="button"
             onClick={openDashboard}
-            className="pointer-events-auto rounded-[2px] border border-accent/40 bg-accent/15 px-3 py-1.5
-              text-[10px] uppercase tracking-wide2 text-accent-bright shadow-lg shadow-black/20
-              backdrop-blur-xl transition hover:bg-accent/25 hover:text-white"
+            className="pointer-events-auto rounded-[2px] border border-white/40 px-3 py-1.5
+              text-[10px] uppercase tracking-wide2 text-white shadow-lg shadow-black/20
+              backdrop-blur-xl transition hover:border-white/70 hover:bg-white/10"
           >
             Dashboard
           </button>

@@ -25,7 +25,7 @@ export default async function OrganisationDashboard({
         <div className="space-y-4">
           <Alert kind="error">{err.message}</Alert>
           <Link href="/dashboard" className="text-sm text-accent hover:text-accent-bright">
-            ← Back to your organisations
+            ← Back to your dashboard
           </Link>
         </div>
       );
@@ -39,13 +39,7 @@ export default async function OrganisationDashboard({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/dashboard"
-          className="text-xs text-white/35 transition hover:text-white/70"
-        >
-          ← Your organisations
-        </Link>
-        <h1 className="mt-2 text-lg font-normal tracking-wide2 text-white">{org.name}</h1>
+        <h1 className="text-lg font-normal tracking-wide2 text-white">{org.name}</h1>
         {org.legalName && org.legalName !== org.name ? (
           <p className="text-sm text-white/35">{org.legalName}</p>
         ) : null}

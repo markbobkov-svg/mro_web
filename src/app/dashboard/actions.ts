@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getOrganisationDomains } from "@/lib/dashboard";
+import { getOrganisationDomains, getOrganisationHold } from "@/lib/dashboard";
 import { domainsMatch, emailDomain, isFreeMailDomain } from "@/lib/domains";
 import { ForbiddenError, requireMember, requireUser } from "@/lib/guards";
 import { getAdminSupabase } from "@/lib/supabase";
@@ -61,23 +61,15 @@ export async function claimExistingOrgAction(
 
   const supabase = getAdminSupabase();
 
-  const { data: existingMember } = await supabase
-    .from("organisation_members")
-    .select("organisation_id")
-    .eq("user_id", user.id)
-    .eq("organisation_id", organisationId)
-    .maybeSingle();
-  if (existingMember) redirect(`/dashboard/${organisationId}`);
-
-  const { data: openClaim } = await supabase
-    .from("organisation_claims")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("organisation_id", organisationId)
-    .eq("status", "pending")
-    .maybeSingle();
-  if (openClaim) {
-    return { error: "You already have a claim pending on this organisation." };
+  // One account, one organisation. A member is sent to the listing it already
+  // holds; an account with a claim still pending or approved cannot open another.
+  const hold = await getOrganisationHold(user.id);
+  if (hold.membershipOrgId) redirect(`/dashboard/${hold.membershipOrgId}`);
+  if (hold.hasActiveClaim) {
+    return {
+      error:
+        "Your account already has a claim in progress — each account can claim one organisation.",
+    };
   }
 
   const host = emailDomain(user.email);
@@ -144,6 +136,16 @@ export async function requestNewOrgAction(
 
   if (!user.emailConfirmed) {
     return { error: "Confirm your e-mail address first." };
+  }
+
+  // One account, one organisation — see claimExistingOrgAction.
+  const hold = await getOrganisationHold(user.id);
+  if (hold.membershipOrgId) redirect(`/dashboard/${hold.membershipOrgId}`);
+  if (hold.hasActiveClaim) {
+    return {
+      error:
+        "Your account already has a claim in progress — each account can claim one organisation.",
+    };
   }
 
   const supabase = getAdminSupabase();

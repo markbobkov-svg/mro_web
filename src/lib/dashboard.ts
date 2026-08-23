@@ -444,6 +444,51 @@ function readChangeRequest(r: Record<string, unknown>): ChangeRequest {
   };
 }
 
+/**
+ * One account, one organisation — what this account already holds.
+ *
+ * `membershipOrgId` is the organisation it manages, if any: membership covers
+ * both roles, `owner` and `editor`, so either lands straight on that listing.
+ * `hasActiveClaim` is true when a claim is still pending or already approved.
+ *
+ * The claim flow is gated on this everywhere — the dashboard redirects a member
+ * to its organisation and hides the claim button once a claim exists, the claim
+ * page redirects, and the claim actions refuse a second one. A *rejected* claim
+ * does not count: it left the account with nothing, so a fresh attempt is fine.
+ */
+export interface OrganisationHold {
+  membershipOrgId: string | null;
+  hasActiveClaim: boolean;
+}
+
+export async function getOrganisationHold(
+  userId: string,
+): Promise<OrganisationHold> {
+  const supabase = getAdminSupabase();
+  const [membersRes, claimsRes] = await Promise.all([
+    supabase
+      .from("organisation_members")
+      .select("organisation_id")
+      .eq("user_id", userId)
+      .limit(1),
+    supabase
+      .from("organisation_claims")
+      .select("id")
+      .eq("user_id", userId)
+      .in("status", ["pending", "approved"])
+      .limit(1),
+  ]);
+
+  const memberRows = (membersRes.data as Record<string, unknown>[]) ?? [];
+  const claimRows = (claimsRes.data as Record<string, unknown>[]) ?? [];
+
+  return {
+    membershipOrgId:
+      memberRows.length > 0 ? String(memberRows[0].organisation_id) : null,
+    hasActiveClaim: claimRows.length > 0,
+  };
+}
+
 /** Claims filed by one user, newest first. */
 export async function getUserClaims(userId: string): Promise<ClaimRow[]> {
   const supabase = getAdminSupabase();

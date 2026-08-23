@@ -120,7 +120,7 @@ export function DashboardTabs({ org }: { org: DashboardOrg }) {
           // above/below — this bar scrolls the tabs instead of arming the
           // drawer's swipe-to-close. See startsInHorizontalScroller in MapView.
           data-drawer-hscroll
-          className="flex gap-1 overflow-x-auto scroll-thin rounded-[2px] border
+          className="flex gap-1 overflow-x-auto scroll-none rounded-[2px] border
             border-white/10 bg-[#141414]/60 p-1"
         >
           {TABS.map((t) => {

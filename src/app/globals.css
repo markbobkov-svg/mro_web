@@ -45,6 +45,18 @@ html.embedded [data-app-header] {
   display: none;
 }
 
+/* Top/bottom dark fades over the scrolling dashboard content, like the landing's
+   scrims (see Landing / MapView). Shown only when the dashboard is embedded in
+   the map's drawer — there the drawer draws no header of its own over this area,
+   so the fades sit flush at the top and bottom edges. Hidden on the standalone
+   dashboard, which carries its own sticky header instead. */
+.dash-scrim {
+  display: none;
+}
+html.embedded .dash-scrim {
+  display: block;
+}
+
 /* ---- SpaceX-ish typographic helpers ---- */
 .tracking-brand {
   letter-spacing: 0.28em;
@@ -71,6 +83,15 @@ html.embedded [data-app-header] {
 }
 .scroll-thin::-webkit-scrollbar-thumb:hover {
   background: #2f3947;
+}
+
+/* Scrollable, but with no visible scrollbar — used on the dashboard tab strip,
+   which scrolls horizontally without a bar. */
+.scroll-none {
+  scrollbar-width: none; /* Firefox */
+}
+.scroll-none::-webkit-scrollbar {
+  display: none; /* WebKit/Blink */
 }
 
 /* ---- Autofill ----

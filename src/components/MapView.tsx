@@ -702,17 +702,15 @@ export default function MapView({
           panel is open, like the brand/search block. */}
       {!activeId && (
         <div className="absolute right-0 top-0 z-[500] flex items-center gap-2 p-5 sm:p-6">
-          {/* Dashboard: just the word — no border, no fill. On hover the
-              letters fill with a white diagonal hatch (a repeating-linear-
-              gradient clipped to the text). */}
+          {/* Dashboard: a plain white outline — transparent fill, white border
+              and text, with a subtle white-tint hover. */}
           <button
             type="button"
             onClick={openDashboard}
-            className="pointer-events-auto px-3 py-1.5
+            className="pointer-events-auto rounded-[2px] border border-white/40 px-3 py-1.5
               text-[10px] uppercase tracking-wide2 text-white
-              [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.9))] transition-colors
-              hover:bg-clip-text hover:text-transparent
-              hover:[background-image:repeating-linear-gradient(45deg,#fff_0,#fff_0.5px,transparent_0.5px,transparent_1px)]"
+              [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.9))] transition
+              hover:border-white/70 hover:bg-white/10"
           >
             Dashboard
           </button>

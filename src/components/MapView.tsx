@@ -408,7 +408,17 @@ export default function MapView({
     const panelLeft = () => drawerPanelRef.current?.getBoundingClientRect().left ?? 0;
     const wire = () => {
       const doc = iframe.contentDocument;
-      if (!doc || (doc as unknown as { __o4fWired?: boolean }).__o4fWired) return;
+      if (!doc) return;
+      // Mark the framed page embedded from here, as a fallback. The dashboard
+      // detects framing itself (an inline script adds html.embedded, which hides
+      // its own in-app header so the drawer's isn't doubled, and reveals the
+      // top/bottom fades). But that lives entirely inside the iframe; if it ever
+      // fails to run — a redirected first load, a stricter host — the header
+      // returns and the fades vanish. We're same-origin, so set it from the
+      // drawer too. Idempotent, and the load veil covers the iframe until this
+      // runs, so there's no flash of the un-embedded chrome.
+      doc.documentElement.classList.add("embedded");
+      if ((doc as unknown as { __o4fWired?: boolean }).__o4fWired) return;
       (doc as unknown as { __o4fWired?: boolean }).__o4fWired = true;
       doc.addEventListener("touchstart", (ev) => {
         const t = (ev as TouchEvent).touches[0];

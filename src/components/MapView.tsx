@@ -702,12 +702,19 @@ export default function MapView({
           panel is open, like the brand/search block. */}
       {!activeId && (
         <div className="absolute right-0 top-0 z-[500] flex items-center gap-2 p-5 sm:p-6">
+          {/* Dashboard: no full border — two small L-brackets at opposite
+              corners (top-left + bottom-right) via ::before / ::after. */}
           <button
             type="button"
             onClick={openDashboard}
-            className="pointer-events-auto rounded-[2px] border border-white/40 px-3 py-1.5
+            className="pointer-events-auto relative px-3 py-1.5
               text-[10px] uppercase tracking-wide2 text-white shadow-lg shadow-black/20
-              backdrop-blur-xl transition hover:border-white/70 hover:bg-white/10"
+              backdrop-blur-xl transition hover:bg-white/10
+              before:pointer-events-none before:absolute before:left-0 before:top-0 before:h-2 before:w-2
+              before:border-l before:border-t before:border-white/60 before:content-['']
+              after:pointer-events-none after:absolute after:bottom-0 after:right-0 after:h-2 after:w-2
+              after:border-b after:border-r after:border-white/60 after:content-['']
+              hover:before:border-white hover:after:border-white"
           >
             Dashboard
           </button>

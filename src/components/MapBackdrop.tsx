@@ -17,7 +17,7 @@ import VectorBasemap from "./VectorBasemap";
  * landing prints a sharp OpenStreetMap credit of its own instead.
  *
  * If WebGL is missing or the map fails to start, this renders nothing and the
- * landing's static field (gradient + station glows) shows through unchanged.
+ * landing's plain black `<main>` shows through unchanged.
  */
 export default function MapBackdrop({
   dots = [],

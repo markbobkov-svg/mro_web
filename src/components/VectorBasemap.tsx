@@ -17,6 +17,9 @@ import {
   LABEL_MIN_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
+  PMTILES_URL,
+  GLYPHS_URL,
+  SPRITE_URL,
 } from "@/lib/basemap";
 
 // maplibre-gl + pmtiles + @protomaps/basemaps ship as npm dependencies and are
@@ -24,26 +27,9 @@ import {
 // own origin (no extra DNS/TLS round trips to a CDN, no third-party uptime
 // dependency) and stay out of the initial bundle.
 
-// Protomaps "black" basemap — a very dark vector theme; English labels.
-// The browser reads the PMTiles straight from our R2 bucket (CORS on the bucket
-// allows ranged GETs from our origins). Going direct drops a serverless hop per
-// tile request and lets Cloudflare's CDN serve the ranges.
-// NOTE: r2.dev is rate limited by Cloudflare and meant for development; for
-// production traffic, point this at a custom domain on the bucket by setting
-// NEXT_PUBLIC_PMTILES_URL (e.g. https://tiles.one4five.tech/europe-z13.pmtiles).
-const PMTILES_URL =
-  process.env.NEXT_PUBLIC_PMTILES_URL ??
-  "https://pub-8dfd157e131f4ce29bfa353f4c095e5a.r2.dev/europe-z13.pmtiles";
-// Fonts + sprites default to Protomaps' own GitHub-hosted assets, but both are
-// overridable so they can be mirrored to our R2 alongside the tiles — relying on
-// someone else's GitHub Pages for a commercial product is a reliability risk
-// (rate limits, path changes), not a licensing one. Mirror once, then set these.
-const GLYPHS =
-  process.env.NEXT_PUBLIC_GLYPHS_URL ??
-  "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
-const SPRITE =
-  process.env.NEXT_PUBLIC_SPRITE_URL ??
-  "https://protomaps.github.io/basemaps-assets/sprites/v4/light";
+// Protomaps "black" basemap — a very dark vector theme; English labels. The
+// tile / glyph / sprite URLs (all env-overridable) live in @/lib/basemap so the
+// root layout can preconnect to the same origins; see the notes there.
 // OpenStreetMap's ODbL requires attribution — shown via a compact control below.
 const ATTRIB =
   '<a href="https://protomaps.com" target="_blank" rel="noreferrer">Protomaps</a> © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
@@ -106,6 +92,7 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
       controls = true,
       dots,
       fitMarkers = false,
+      minimal = false,
     },
     ref,
   ) {
@@ -255,26 +242,36 @@ const VectorBasemap = forwardRef<BasemapHandle, BasemapProps>(
         const initialBounds = fitMarkers
           ? markerBounds(markersRef.current)
           : null;
+        // The blurred landing backdrop (minimal) can't show text anyway, so drop
+        // every symbol (label) layer. With no labels the style needs no glyphs or
+        // sprite, so the map makes zero requests to the third-party Protomaps
+        // asset host — only the tiles load, and the backdrop paints sooner.
+        const allLayers = basemaps.layers(
+          "protomaps",
+          basemaps.namedFlavor("black"),
+          { lang: "en" },
+        );
+        const style: any = {
+          version: 8,
+          sources: {
+            protomaps: {
+              type: "vector",
+              url: `pmtiles://${PMTILES_URL}`,
+              attribution: ATTRIB,
+            },
+          },
+          layers: minimal
+            ? allLayers.filter((l: any) => l.type !== "symbol")
+            : tidyLayers(allLayers),
+        };
+        if (!minimal) {
+          style.glyphs = GLYPHS_URL;
+          style.sprite = SPRITE_URL;
+        }
         try {
           map = new maplibregl.Map({
             container: containerRef.current,
-            style: {
-              version: 8,
-              glyphs: GLYPHS,
-              sprite: SPRITE,
-              sources: {
-                protomaps: {
-                  type: "vector",
-                  url: `pmtiles://${PMTILES_URL}`,
-                  attribution: ATTRIB,
-                },
-              },
-              layers: tidyLayers(
-                basemaps.layers("protomaps", basemaps.namedFlavor("black"), {
-                  lang: "en",
-                }),
-              ),
-            },
+            style,
             ...(initialBounds
               ? {
                   bounds: initialBounds,

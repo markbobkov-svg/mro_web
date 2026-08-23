@@ -40,6 +40,9 @@ export default function MapBackdrop({
           onFail={() => setFailed(true)}
           interactive={false}
           controls={false}
+          // Blurred backdrop: skip labels, glyphs and sprites so it paints from
+          // tiles alone, with no third-party font/sprite fetches on the way.
+          minimal
         />
       </div>
     </div>

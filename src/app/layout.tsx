@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { mapAssetOrigins } from "@/lib/basemap";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,6 +30,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* The map is the product, so `/` always paints one (the real map, or
+            the blurred landing backdrop). Warm the connections to the tile /
+            font / sprite origins now, while the page's JS is still downloading,
+            so MapLibre's first asset requests don't each pay for a fresh DNS +
+            TLS handshake. crossOrigin matches the map's CORS fetches, so the
+            warmed socket is actually reused. */}
+        {mapAssetOrigins().map((origin) => (
+          <link
+            key={origin}
+            rel="preconnect"
+            href={origin}
+            crossOrigin="anonymous"
+          />
+        ))}
+      </head>
       <body>
         {/* Flag pages that are framed (the map's dashboard drawer loads the
             dashboard in a same-origin <iframe>) so globals.css can hide their

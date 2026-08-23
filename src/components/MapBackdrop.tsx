@@ -7,7 +7,8 @@
  * a single static image: a pre-rendered dark map of Europe with the airport dot
  * positions baked in (coordinates only — no names, counts or ids reach the
  * browser, same as before), built from the same CARTO dark tiles + marker set
- * and framed to match the map's own view (centre 10,50 / zoom 4).
+ * and framed to match the map's own view (centre 10,50, zoomed so Europe fills
+ * the frame like the live map's COVERAGE_BBOX does).
  *
  * The frosted look — a light blur, a brightness lift and a slight scale-up to
  * hide the blur's soft edges — is applied here in CSS, exactly as it was over

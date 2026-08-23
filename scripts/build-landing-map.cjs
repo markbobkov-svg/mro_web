@@ -49,7 +49,7 @@ const sb = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, { auth: { persistSes
 
 // framing — must match VectorBasemap's backdrop view (see src/lib/basemap.ts)
 const CENTER = [10, 50];
-const Z = 4;
+const Z = 5; // matches the main map: COVERAGE_BBOX (~Europe) fills the frame
 const W = 1920, H = 1200, TSIZE = 256;
 const world = TSIZE * Math.pow(2, Z);
 const lngToX = (lng) => ((lng + 180) / 360) * world;

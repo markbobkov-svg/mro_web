@@ -17,11 +17,8 @@ import LandingContent from "./LandingContent";
  */
 export function Landing({
   organisationCount = 0,
-  dots = [],
 }: {
   organisationCount?: number;
-  /** Airport dot coordinates for the blurred backdrop (positions only). */
-  dots?: [number, number][];
 }) {
   return (
     <main className="relative h-viewport w-full overflow-hidden bg-black">
@@ -30,7 +27,7 @@ export function Landing({
           blurred map and its scrim never slide away as the page is scrolled.
           Until the map paints — and if WebGL is missing — the plain black
           `<main>` shows through on its own. */}
-      <MapBackdrop dots={dots} />
+      <MapBackdrop />
       <Scrim />
       {/* The scrolling layer. overscroll-y-none stops the rubber-band bounce
           when pulling down at the very top of the page. */}

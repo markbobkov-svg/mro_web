@@ -1,50 +1,33 @@
-"use client";
-
-import { useState } from "react";
-
-import VectorBasemap from "./VectorBasemap";
-
 /**
- * Our own vector basemap, rendered as a passive backdrop for the signed-out
- * landing — the real map behind frosted glass.
+ * Passive, frosted backdrop for the signed-out landing.
  *
- * Airport `dots` (coordinates only — no names, counts or ids) render as a cheap
- * GL circle layer so the network shows through the blur, but nothing an operator
- * signs in for reaches the browser. The map is frozen (interactive=false +
- * pointer-events-none) and carries no controls. The blur and a slight scale-up
- * (to hide the blur's soft, transparent edges) are applied here. The map's own
- * attribution control is dropped because it would be blurred and illegible — the
- * landing prints a sharp OpenStreetMap credit of its own instead.
+ * This used to mount the real vector map (MapLibre + PMTiles) just to show it
+ * blurred behind the gate — which pulled the ~870 kB map chunk and streamed
+ * tiles from R2 on the *front door*, so the landing felt slow. It's replaced by
+ * a single static image: a pre-rendered dark map of Europe with the airport dot
+ * positions baked in (coordinates only — no names, counts or ids reach the
+ * browser, same as before), built from the same CARTO dark tiles + marker set
+ * and framed to match the map's own view (centre 10,50 / zoom 4).
  *
- * If WebGL is missing or the map fails to start, this renders nothing and the
- * landing's plain black `<main>` shows through unchanged.
+ * The frosted look — a light blur, a brightness lift and a slight scale-up to
+ * hide the blur's soft edges — is applied here in CSS, exactly as it was over
+ * the live map. No WebGL, no tile fetches, nothing to wait for: it's a single
+ * ~140 kB image in /public, so it paints about as fast as the page itself.
  */
-export default function MapBackdrop({
-  dots = [],
-}: {
-  dots?: [number, number][];
-}) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
-
+export default function MapBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* Protomaps "black" is near-black; brighten it so the map actually reads
-          as a backdrop, and keep the blur light enough that coastlines show. */}
-      <div className="absolute inset-0 origin-center scale-[1.06] blur-[3px] brightness-[1.7] contrast-[1.08]">
-        <VectorBasemap
-          markers={[]}
-          dots={dots}
-          activeId={null}
-          onSelect={() => {}}
-          onFail={() => setFailed(true)}
-          interactive={false}
-          controls={false}
-          // Blurred backdrop: skip labels, glyphs and sprites so it paints from
-          // tiles alone, with no third-party font/sprite fetches on the way.
-          minimal
-        />
-      </div>
+      {/* Plain <img>: the asset is pre-sized and already compressed, so there's
+          nothing for next/image to optimise, and this keeps the landing off the
+          image-optimiser path entirely. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/landing-map.jpg"
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full origin-center scale-[1.06] object-cover
+          blur-[3px] brightness-[1.2] contrast-[1.05]"
+      />
     </div>
   );
 }

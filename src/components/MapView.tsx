@@ -26,6 +26,27 @@ interface Props {
 
 type Engine = "vector" | "raster";
 
+/**
+ * Does this touch land inside a strip that scrolls horizontally *and* has
+ * somewhere left to scroll? Walks up from the target for an element whose
+ * content is wider than its box and whose computed overflow-x is auto/scroll.
+ *
+ * The dashboard drawer's swipe-to-close reads horizontal drags; a nested
+ * horizontal scroller (the dashboard tab bar, a wide table) reads the same
+ * gesture. When a drag starts inside one, it belongs to that scroller — so the
+ * drawer yields and never arms its close-swipe, letting the strip scroll
+ * natively instead of being hijacked into a drag-to-dismiss.
+ */
+function startsInHorizontalScroller(target: EventTarget | null): boolean {
+  let el = target instanceof Element ? target : null;
+  for (; el; el = el.parentElement) {
+    if (el.scrollWidth <= el.clientWidth) continue; // nothing to scroll here
+    const ox = el.ownerDocument.defaultView?.getComputedStyle(el).overflowX;
+    if (ox === "auto" || ox === "scroll") return true;
+  }
+  return false;
+}
+
 export default function MapView({
   markers,
   organisationCount,
@@ -358,7 +379,12 @@ export default function MapView({
       (doc as unknown as { __o4fWired?: boolean }).__o4fWired = true;
       doc.addEventListener("touchstart", (ev) => {
         const t = (ev as TouchEvent).touches[0];
-        if (t) beginSwipe(t.clientX + panelLeft(), t.clientY);
+        if (!t) return;
+        // A drag that starts on a horizontally-scrollable strip (the dashboard
+        // tab bar, a wide table) belongs to that strip — don't arm the close-
+        // swipe, or it would hijack the drag and the tabs could never scroll.
+        if (startsInHorizontalScroller(ev.target)) return;
+        beginSwipe(t.clientX + panelLeft(), t.clientY);
       }, passive);
       // touchmove is non-passive so that, once the gesture locks into a
       // horizontal close-drag, we can preventDefault to freeze the dashboard's

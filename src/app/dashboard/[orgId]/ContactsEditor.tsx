@@ -203,7 +203,10 @@ function DeleteContactButton({
   const [state, action] = useFormState(deleteContactAction, EMPTY);
 
   return (
-    <form action={action}>
+    // `contents` drops the form's own box from layout, so its button — not the
+    // form — is the actual flex item next to "Edit"; otherwise the two could
+    // get very slightly different heights and visibly misalign.
+    <form action={action} className="contents">
       <input type="hidden" name="organisationId" value={orgId} />
       <input type="hidden" name="contactId" value={contactId} />
       <button

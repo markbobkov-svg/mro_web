@@ -270,19 +270,6 @@ function isDuplicate(err: unknown): boolean {
   return e.code === "23505" || /duplicate key value/i.test(e.message ?? "");
 }
 
-/**
- * PostgREST rejecting a write because a column is not in its schema cache —
- * which is what a not-yet-applied migration looks like from here.
- */
-function isUnknownColumn(err: unknown, column: string): boolean {
-  if (!err || typeof err !== "object") return false;
-  const e = err as { code?: string; message?: string };
-  return (
-    e.code === "PGRST204" &&
-    new RegExp(`'${column}' column`, "i").test(e.message ?? "")
-  );
-}
-
 function revalidateOrg(organisationId: string): void {
   revalidatePath(`/dashboard/${organisationId}`);
   revalidatePath("/");
@@ -643,11 +630,14 @@ export async function saveStationAction(
   const stationId = str(data, "stationId");
   const airportCode = str(data, "airportCode");
 
+  // No `hours` here on purpose: when that station phone is answered belongs to
+  // a desk (organisation_contacts.hours), which already carries hours and can
+  // hold several numbers per station. The station's own phone is a scraped
+  // fallback for the card header, not a contact in its own right.
   const details = {
     address: nullable(data, "address"),
     phone: nullable(data, "phone"),
     email: nullable(data, "email"),
-    hours: nullable(data, "hours"),
     is_base: bool(data, "isBase"),
   };
 
@@ -655,24 +645,13 @@ export async function saveStationAction(
     await requireMember(user, organisationId);
     const supabase = getAdminSupabase();
 
-    // `hours` arrives with migration 0006. Until that is applied the column is
-    // not there, so drop it and save the rest rather than failing the whole
-    // edit — the field simply doesn't stick until the migration runs.
-    const withoutHours = () => {
-      const { hours: _hours, ...rest } = details;
-      return rest;
-    };
-
     if (stationId) {
       await assertOwnStation(supabase, organisationId, stationId);
-      const update = (row: Record<string, unknown>) =>
-        supabase
-          .from("organisation_stations")
-          .update(row)
-          .eq("id", stationId)
-          .eq("organisation_id", organisationId);
-      let { error } = await update(details);
-      if (isUnknownColumn(error, "hours")) ({ error } = await update(withoutHours()));
+      const { error } = await supabase
+        .from("organisation_stations")
+        .update(details)
+        .eq("id", stationId)
+        .eq("organisation_id", organisationId);
       if (error) throw error;
     } else {
       if (!airportCode) return { error: "Enter the airport's IATA or ICAO code." };
@@ -689,12 +668,9 @@ export async function saveStationAction(
       if (existing) {
         return { error: "You already have a station at that airport." };
       }
-      const insert = (row: Record<string, unknown>) =>
-        supabase
-          .from("organisation_stations")
-          .insert({ organisation_id: organisationId, airport_id: airportId, ...row });
-      let { error } = await insert(details);
-      if (isUnknownColumn(error, "hours")) ({ error } = await insert(withoutHours()));
+      const { error } = await supabase
+        .from("organisation_stations")
+        .insert({ organisation_id: organisationId, airport_id: airportId, ...details });
       if (error) throw error;
     }
   } catch (err) {

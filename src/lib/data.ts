@@ -269,7 +269,7 @@ export async function getAirportDetail(
       supabase
         .from("organisation_contacts")
         .select(
-          "organisation_id, label, name, phone, email, hours, station_iata, station_icao",
+          "organisation_id, function_label, label, name, phone, email, hours, station_iata, station_icao",
         )
         .in("organisation_id", orgIds),
       supabase.from("authorities").select("id, code, name"),
@@ -431,10 +431,14 @@ export async function getAirportDetail(
     const stationSpecific = cIata || cIcao;
     const matchesAirport = (iata && cIata === iata) || (icao && cIcao === icao);
     if (stationSpecific && !matchesAirport) continue;
-    if (!c.phone && !c.email && !c.name && !c.label) continue;
+    // `function_label` is what both the scraper and the dashboard write;
+    // `label` is the older column and is null on every dashboard-entered desk,
+    // so reading it alone left those contacts on the map with no caption.
+    const label = c.function_label ?? c.label ?? null;
+    if (!c.phone && !c.email && !c.name && !label) continue;
     const list = contactsByOrg.get(c.organisation_id) ?? [];
     list.push({
-      label: c.label ?? null,
+      label,
       name: c.name ?? null,
       phone: c.phone ?? null,
       email: c.email ?? null,

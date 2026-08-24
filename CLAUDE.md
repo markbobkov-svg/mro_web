@@ -238,6 +238,18 @@ Tables: `airports`, `authorities`, `organisations`, `organisation_stations`,
   certificate document. There is no fallback: a scope row's `source_url` is
   often just the organisation's website, so it is never used for the cert link,
   and an approval with no `source_url` shows no certificate icon at all.
+- **A desk's caption is `organisation_contacts.function_label`, not `label`.**
+  Both columns exist; `function_label` is what the scraper and the dashboard
+  write, `label` is the older one and is null on every dashboard-entered desk.
+  Read `function_label ?? label` — reading `label` alone once left 19 of 27
+  contacts at TLL captionless on the public card.
+- **Opening hours belong to a desk, not to a station.** `organisation_contacts`
+  carries `hours` and can hold several desks per station, which is where a
+  "24/7" or "Mon–Fri 06:00–22:00" goes. `organisation_stations.phone/email` is
+  vestigial scraper data — filled on 22 of 7096 rows — and only ever collapses
+  into the card header scalar (`profile ?? station ?? org`), which has no hours
+  slot. A station-level `hours` column was written and reverted for exactly
+  this reason: nothing on the map could ever display it.
 
 ## Gotchas
 

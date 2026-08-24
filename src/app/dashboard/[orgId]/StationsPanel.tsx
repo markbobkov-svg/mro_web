@@ -82,9 +82,9 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
                               </span>
                             ) : null}
                           </p>
-                          {s.address || s.phone || s.email || s.hours ? (
+                          {s.address || s.phone || s.email ? (
                             <p className="mt-0.5 truncate text-xs text-white/35">
-                              {[s.address, s.phone, s.hours, s.email]
+                              {[s.address, s.phone, s.email]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </p>
@@ -493,15 +493,8 @@ function StationForm({
             <Input name="airportCode" placeholder="FRA / EDDF" />
           </Field>
         ) : null}
-        <Field label="Phone">
+        <Field label="Phone" hint="for opening hours, add a contact below">
           <Input name="phone" defaultValue={station?.phone ?? ""} />
-        </Field>
-        <Field label="Phone hours" hint="when that number is answered">
-          <Input
-            name="hours"
-            defaultValue={station?.hours ?? ""}
-            placeholder="24/7 or Mon–Fri 06:00–22:00"
-          />
         </Field>
         <Field label="E-mail">
           <Input name="email" type="email" defaultValue={station?.email ?? ""} />

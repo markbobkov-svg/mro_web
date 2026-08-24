@@ -340,6 +340,9 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
                     {c.email}
                   </a>
                 )}
+                {c.hours && (
+                  <span className="text-white/35">{c.hours}</span>
+                )}
               </div>
             </div>
           ))}

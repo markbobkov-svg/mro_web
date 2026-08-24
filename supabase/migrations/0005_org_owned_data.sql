@@ -185,11 +185,15 @@ begin
      where exists (select 1 from public.organisation_managed_contacts m
                     where m.organisation_id = c.organisation_id);
 
+    -- `model` is NOT NULL (the scraper records what extracted the row); mark
+    -- these as dashboard-entered. `contact_key` is generated and UNIQUE, so two
+    -- identical desks collide — skip the duplicate rather than abort.
     insert into public.organisation_contacts
-      (organisation_id, function_label, name, phone, email, hours, sort_order)
+      (organisation_id, function_label, name, phone, email, hours, sort_order, model)
     select m.organisation_id, m.function_label, m.name, m.phone, m.email, m.hours,
-           coalesce(m.sort_order, 0)
-      from public.organisation_managed_contacts m;
+           coalesce(m.sort_order, 0), 'dashboard'
+      from public.organisation_managed_contacts m
+    on conflict do nothing;
   end if;
 end $$;
 
@@ -215,7 +219,8 @@ begin
       from public.organisation_managed_station_scope m
       join public.organisation_stations s
         on s.organisation_id = m.organisation_id
-       and s.airport_id = m.airport_id;
+       and s.airport_id = m.airport_id
+    on conflict do nothing;
   end if;
 end $$;
 
@@ -247,7 +252,8 @@ begin
        and not exists (
          select 1 from public.organisation_stations s
           where s.organisation_id = m.organisation_id
-            and s.airport_id = m.airport_id);
+            and s.airport_id = m.airport_id)
+    on conflict do nothing;
   end if;
 end $$;
 

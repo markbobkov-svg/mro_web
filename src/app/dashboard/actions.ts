@@ -263,6 +263,13 @@ async function assertOwnStation(
   if (!data) throw new ForbiddenError("That station is not yours.");
 }
 
+/** A UNIQUE-constraint clash (Postgres 23505), not a genuine error. */
+function isDuplicate(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  return e.code === "23505" || /duplicate key value/i.test(e.message ?? "");
+}
+
 function revalidateOrg(organisationId: string): void {
   revalidatePath(`/dashboard/${organisationId}`);
   revalidatePath("/");
@@ -308,10 +315,19 @@ export async function saveContactAction(
         .eq("organisation_id", organisationId);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from("organisation_contacts").insert(row);
+      // `model` is NOT NULL — the scraper records what extracted a contact, so
+      // mark ours as dashboard-entered.
+      const { error } = await supabase
+        .from("organisation_contacts")
+        .insert({ ...row, model: "dashboard" });
       if (error) throw error;
     }
   } catch (err) {
+    // contact_key is generated from the desk's own fields and is UNIQUE, so an
+    // exact duplicate is a clash rather than a real failure — say so plainly.
+    if (isDuplicate(err)) {
+      return { error: "You already have a contact with exactly these details." };
+    }
     return { error: toMessage(err) };
   }
 
@@ -414,6 +430,9 @@ export async function saveOrgScopeAction(
       if (error) throw error;
     }
   } catch (err) {
+    if (isDuplicate(err)) {
+      return { error: "That scope line is already on your list." };
+    }
     return { error: toMessage(err) };
   }
 
@@ -486,6 +505,9 @@ export async function saveStationScopeAction(
       if (error) throw error;
     }
   } catch (err) {
+    if (isDuplicate(err)) {
+      return { error: "That scope line is already on this station." };
+    }
     return { error: toMessage(err) };
   }
 
@@ -547,16 +569,29 @@ export async function importOrgScopeToStationAction(
       .limit(3000);
     if (readErr) throw readErr;
 
-    const rows = ((orgScope as Record<string, unknown>[]) ?? []).map((r) => ({
-      organisation_id: organisationId,
-      station_id: stationId,
-      organisation_approval_id: r.organisation_approval_id ?? null,
-      authority_id: r.authority_id ?? null,
-      authority_text: r.authority_text ?? null,
-      rating_class_text: r.rating_class_text ?? null,
-      scope_text: r.scope_text ?? null,
-      location_scope: r.location_scope ?? null,
-    }));
+    // Both scope tables carry a generated, UNIQUE scope_key, so two identical
+    // lines in the organisation's own scope would sink the whole batch. Collapse
+    // them first — the station only needs each distinct line once.
+    const seen = new Set<string>();
+    const rows: Record<string, unknown>[] = [];
+    for (const r of (orgScope as Record<string, unknown>[]) ?? []) {
+      const key = [r.rating_class_text, r.scope_text, r.location_scope]
+        .map((v) => String(v ?? ""))
+        .join("|")
+        .toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        organisation_id: organisationId,
+        station_id: stationId,
+        organisation_approval_id: r.organisation_approval_id ?? null,
+        authority_id: r.authority_id ?? null,
+        authority_text: r.authority_text ?? null,
+        rating_class_text: r.rating_class_text ?? null,
+        scope_text: r.scope_text ?? null,
+        location_scope: r.location_scope ?? null,
+      });
+    }
     if (rows.length === 0) {
       return { error: "There is no organisation scope to import yet." };
     }
@@ -569,7 +604,11 @@ export async function importOrgScopeToStationAction(
       .eq("station_id", stationId);
     if (delErr) throw delErr;
 
-    const { error } = await supabase.from("organisation_station_scope").insert(rows);
+    // ignoreDuplicates: anything that still clashes on scope_key is already
+    // there, which is the outcome we wanted anyway.
+    const { error } = await supabase
+      .from("organisation_station_scope")
+      .upsert(rows, { onConflict: "scope_key", ignoreDuplicates: true });
     if (error) throw error;
     copied = rows.length;
   } catch (err) {

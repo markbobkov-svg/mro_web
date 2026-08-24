@@ -20,6 +20,34 @@ is still limited — see the SMTP item in `CLAUDE.md`).
 The two `…-mro`/`gmail` accounts only ever reach the demo organisation; the
 airline account only its demo airline. None are administrators.
 
+## The one-click switcher — temporary, remove before launch
+
+While testing, the landing page is replaced by a switcher for exactly these four
+accounts: `/dev-login`, and `/` for anyone signed out. One click signs in and
+drops you where you want to be — dashboard, claim flow, review queue or the map
+— with no password, including the administrator, whose password is not written
+down here. It works while you are already signed in too, so switching accounts
+takes one click rather than a sign-out and a sign-in.
+
+Passwordless because the app holds a service_role key: the switcher asks GoTrue
+to mint a magic-link token for the address (`/admin/generate_link`, which
+generates but does not send, so the SMTP limits in `CLAUDE.md` don't apply) and
+redeems it itself. What lands in the cookies is an ordinary session, so every
+guard behaves exactly as it does in real life.
+
+**It is a hole while it is deployed** — anyone who opens the page becomes any of
+these accounts, administrator included. The hardcoded list in
+`src/app/dev-login/accounts.ts` is the only thing narrowing it. To take it out:
+
+```
+rm -r src/app/dev-login
+```
+
+then restore the two marked spots in `src/app/page.tsx` (the `Landing` /
+`getPublicStats` imports and the signed-out branch — the original is in the
+comment there) and the pointer under *Access — the sign-in wall* in `CLAUDE.md`.
+Nothing else references either.
+
 ## The demo organisation
 
 **Demo MRO (ONE4FIVE test)** — a fabricated Part-145 organisation, seeded with

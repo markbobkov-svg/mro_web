@@ -1,8 +1,10 @@
 import MapView from "@/components/MapView";
 import SetupNotice from "@/components/SetupNotice";
-import { Landing } from "@/components/Landing";
+// TEMPORARY: the landing is swapped for the test-account switcher — see below.
+// import { Landing } from "@/components/Landing";
+import DevLoginPanel from "./dev-login/DevLoginPanel";
 import { hasSupabaseCredentials } from "@/lib/supabase";
-import { getAirportMarkers, getPublicStats } from "@/lib/data";
+import { getAirportMarkers } from "@/lib/data";
 import { getCurrentUser } from "@/lib/session";
 import { getViewerOrgScope, resolveHomePath } from "@/lib/guards";
 import type { AirportMarker } from "@/lib/types";
@@ -22,17 +24,19 @@ export default async function Home() {
   // counts or per-organisation details, and the backdrop map is non-interactive.
   const user = await getCurrentUser();
   if (!user) {
-    // The landing's map backdrop is a static image with the airport dots baked
-    // in, so it needs no per-request marker query — just the headline count,
-    // which is the *whole* register (1,600+), not only the orgs with a mapped
-    // station (see getPublicStats).
-    let organisationCount = 0;
-    try {
-      organisationCount = (await getPublicStats()).organisationCount;
-    } catch {
-      // The count is nice-to-have; never block the front door.
-    }
-    return <Landing organisationCount={organisationCount} />;
+    // TEMPORARY — while testing, the front door is the one-click switcher for
+    // the TESTING.md accounts instead of the landing. To put the landing back:
+    // restore the `Landing` / `getPublicStats` imports above and swap this
+    // block for the original, which is one `git show` away —
+    //
+    //   let organisationCount = 0;
+    //   try {
+    //     organisationCount = (await getPublicStats()).organisationCount;
+    //   } catch {}
+    //   return <Landing organisationCount={organisationCount} />;
+    //
+    // then delete src/app/dev-login/. Nothing else references either.
+    return <DevLoginPanel />;
   }
 
   // A signed-in MRO sees only its own network: the airports where it has a

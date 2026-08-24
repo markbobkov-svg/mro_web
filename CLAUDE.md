@@ -19,6 +19,12 @@ organisation details, rendered as a GL circle layer); the full markers and every
 per-organisation detail stay behind the wall. So the "SSR ships all markers" note
 below applies only to signed-in requests.
 
+> **Temporary, while testing:** `/` currently renders the passwordless
+> test-account switcher (`src/app/dev-login/`) instead of the landing, so the
+> TESTING.md accounts are one click apart. It signs in as any of four hardcoded
+> addresses without a password — **a hole while it is deployed**. Removal is one
+> `rm -r` and one revert in `src/app/page.tsx`; see TESTING.md.
+
 ## Stack
 
 - **Next.js 14** (App Router) + TypeScript + Tailwind

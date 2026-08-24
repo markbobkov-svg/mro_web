@@ -41,84 +41,85 @@ export function ApprovalsPanel({
 
   return (
     <div className="space-y-3">
-      {/* The card holds only the list — Add lives outside it, below. */}
-      <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
-        {org.approvals.length === 0 ? (
-          <p className="text-sm text-white/35">
-            No approvals on file. If you hold one, add it below.
-          </p>
-        ) : (
-          <ul className="divide-y divide-white/10">
-            {org.approvals.map((a) => {
-              const editing = open?.id === a.id && open.mode === "update";
-              const removing = open?.id === a.id && open.mode === "remove";
+      {org.approvals.length === 0 ? (
+        <p className="text-sm text-white/35">
+          No approvals on file. If you hold one, add it below.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {org.approvals.map((a) => {
+            const editing = open?.id === a.id && open.mode === "update";
+            const removing = open?.id === a.id && open.mode === "remove";
 
-              if (editing || removing) {
-                return (
-                  <li key={a.id} className="py-4">
-                    <ApprovalForm
-                      org={org}
-                      mode={open!.mode}
-                      approval={a}
-                      authorities={authorities}
-                      onDone={() => setOpen(null)}
-                    />
-                  </li>
-                );
-              }
-
+            if (editing || removing) {
               return (
                 <li
                   key={a.id}
-                  className="flex items-start justify-between gap-4 py-3"
+                  className="rounded-[2px] border border-white/10 bg-black/30 p-4"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm text-white/90">
-                      <span className="mr-2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-white/45">
-                        {a.authorityCode}
-                      </span>
-                      {a.approvalType}
-                      {a.reference ? (
-                        <span className="ml-2 font-mono text-xs text-white/45">
-                          {a.reference}
-                        </span>
-                      ) : null}
-                    </p>
-                    {a.ratings.length > 0 ? (
-                      <p className="mt-1 text-xs text-white/35">
-                        {a.ratings.join(" · ")}
-                      </p>
-                    ) : null}
-                    {a.validUntil ? (
-                      <p className="mt-0.5 text-xs text-white/25">
-                        valid until {a.validUntil}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOpen({ id: a.id, mode: "update" })}
-                      className="text-xs text-white/45 transition hover:text-white"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOpen({ id: a.id, mode: "remove" })}
-                      className="text-xs text-white/45 transition hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                  <ApprovalForm
+                    org={org}
+                    mode={open!.mode}
+                    approval={a}
+                    authorities={authorities}
+                    onDone={() => setOpen(null)}
+                  />
                 </li>
               );
-            })}
-          </ul>
-        )}
-      </div>
+            }
 
-      {/* Add approval — its own button below the card, boxed like the Scope
+            return (
+              <li
+                key={a.id}
+                className="flex items-start justify-between gap-4 rounded-[2px]
+                  border border-white/10 bg-black/30 p-4"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white/90">
+                    <span className="mr-2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-white/45">
+                      {a.authorityCode}
+                    </span>
+                    {a.approvalType}
+                    {a.reference ? (
+                      <span className="ml-2 font-mono text-xs text-white/45">
+                        {a.reference}
+                      </span>
+                    ) : null}
+                  </p>
+                  {a.ratings.length > 0 ? (
+                    <p className="mt-1 text-xs text-white/35">
+                      {a.ratings.join(" · ")}
+                    </p>
+                  ) : null}
+                  {a.validUntil ? (
+                    <p className="mt-0.5 text-xs text-white/25">
+                      valid until {a.validUntil}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: a.id, mode: "update" })}
+                    className="text-xs text-white/45 transition hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: a.id, mode: "remove" })}
+                    className="text-xs text-white/45 transition hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Add approval — its own card below the list, boxed like the Scope
           tab's "New scope line" so a multi-field form has room to breathe. */}
       {addOpen ? (
         <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
@@ -280,75 +281,76 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
 
   return (
     <div className="space-y-3">
-      {/* The card holds only the list — Add lives outside it, below. */}
-      <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
-        {org.stations.length === 0 ? (
-          <p className="text-sm text-white/35">
-            You don&rsquo;t appear at any airport yet.
-          </p>
-        ) : (
-          <ul className="divide-y divide-white/10">
-            {org.stations.map((s) => {
-              const editing = open?.id === s.id && open.mode === "update";
-              const removing = open?.id === s.id && open.mode === "remove";
+      {org.stations.length === 0 ? (
+        <p className="text-sm text-white/35">
+          You don&rsquo;t appear at any airport yet.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {org.stations.map((s) => {
+            const editing = open?.id === s.id && open.mode === "update";
+            const removing = open?.id === s.id && open.mode === "remove";
 
-              if (editing || removing) {
-                return (
-                  <li key={s.id} className="py-4">
-                    <StationForm
-                      org={org}
-                      mode={open!.mode}
-                      station={s}
-                      onDone={() => setOpen(null)}
-                    />
-                  </li>
-                );
-              }
-
+            if (editing || removing) {
               return (
                 <li
                   key={s.id}
-                  className="flex items-start justify-between gap-4 py-3"
+                  className="rounded-[2px] border border-white/10 bg-black/30 p-4"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm text-white/90">
-                      {s.iata || s.icao ? (
-                        <span className="mr-2 font-mono text-xs text-accent">
-                          {s.iata ?? s.icao}
-                        </span>
-                      ) : null}
-                      {s.airportName ?? "Unknown airport"}
-                    </p>
-                    {s.address || s.phone || s.email ? (
-                      <p className="mt-0.5 truncate text-xs text-white/35">
-                        {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOpen({ id: s.id, mode: "update" })}
-                      className="text-xs text-white/45 transition hover:text-white"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOpen({ id: s.id, mode: "remove" })}
-                      className="text-xs text-white/45 transition hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                  <StationForm
+                    org={org}
+                    mode={open!.mode}
+                    station={s}
+                    onDone={() => setOpen(null)}
+                  />
                 </li>
               );
-            })}
-          </ul>
-        )}
-      </div>
+            }
 
-      {/* Add station — its own button below the card, boxed like the Scope
+            return (
+              <li
+                key={s.id}
+                className="flex items-start justify-between gap-4 rounded-[2px]
+                  border border-white/10 bg-black/30 p-4"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white/90">
+                    {s.iata || s.icao ? (
+                      <span className="mr-2 font-mono text-xs text-accent">
+                        {s.iata ?? s.icao}
+                      </span>
+                    ) : null}
+                    {s.airportName ?? "Unknown airport"}
+                  </p>
+                  {s.address || s.phone || s.email ? (
+                    <p className="mt-0.5 truncate text-xs text-white/35">
+                      {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: s.id, mode: "update" })}
+                    className="text-xs text-white/45 transition hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: s.id, mode: "remove" })}
+                    className="text-xs text-white/45 transition hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Add station — its own card below the list, boxed like the Scope
           tab's "New scope line" so a multi-field form has room to breathe. */}
       {addOpen ? (
         <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">

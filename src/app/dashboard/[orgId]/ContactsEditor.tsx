@@ -22,53 +22,53 @@ export function ContactsEditor({ org }: { org: DashboardOrg }) {
 
   return (
     <div className="space-y-3">
-      {/* The card holds only the list (or the import prompt) — Add lives
-          outside it, below. */}
-      <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
-        {!hasManaged ? (
-          <ImportPanel org={org} />
-        ) : (
-          <ul className="divide-y divide-white/10">
-            {org.contacts.map((c) =>
-              editingId === c.id ? (
-                <li key={c.id} className="py-4">
-                  <ContactForm
-                    org={org}
-                    contact={c}
-                    onDone={() => setEditingId(null)}
-                  />
-                </li>
-              ) : (
-                <li
-                  key={c.id}
-                  className="flex items-start justify-between gap-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-white/90">
-                      {c.functionLabel ?? c.name ?? "Contact"}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-white/35">
-                      {[c.name, c.phone, c.email, c.hours].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(c.id)}
-                      className="text-xs text-white/45 transition hover:text-white"
-                    >
-                      Edit
-                    </button>
-                    <DeleteContactButton orgId={org.id} contactId={c.id} />
-                  </div>
-                </li>
-              ),
-            )}
-          </ul>
-        )}
-      </div>
+      {!hasManaged ? (
+        <ImportPanel org={org} />
+      ) : (
+        <ul className="space-y-2">
+          {org.contacts.map((c) =>
+            editingId === c.id ? (
+              <li
+                key={c.id}
+                className="rounded-[2px] border border-white/10 bg-black/30 p-4"
+              >
+                <ContactForm
+                  org={org}
+                  contact={c}
+                  onDone={() => setEditingId(null)}
+                />
+              </li>
+            ) : (
+              <li
+                key={c.id}
+                className="flex items-start justify-between gap-4 rounded-[2px]
+                  border border-white/10 bg-black/30 p-4"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white/90">
+                    {c.functionLabel ?? c.name ?? "Contact"}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-white/35">
+                    {[c.name, c.phone, c.email, c.hours].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(c.id)}
+                    className="text-xs text-white/45 transition hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  <DeleteContactButton orgId={org.id} contactId={c.id} />
+                </div>
+              </li>
+            ),
+          )}
+        </ul>
+      )}
 
-      {/* Add contact — its own button below the card, boxed like the Scope
+      {/* Add contact — its own card below the list, boxed like the Scope
           tab's "New scope line" so a multi-field form has room to breathe. */}
       {adding ? (
         <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">

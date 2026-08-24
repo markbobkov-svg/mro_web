@@ -3,28 +3,23 @@
 import { useState } from "react";
 import { useFormState } from "react-dom";
 
-import {
-  deleteStationAction,
-  proposeChangeAction,
-  saveStationAction,
-  type ActionState,
-} from "../actions";
+import { proposeChangeAction, type ActionState } from "../actions";
 import type {
   AuthorityOption,
   DashboardApproval,
   DashboardOrg,
-  DashboardStation,
 } from "@/lib/dashboard";
 import { Alert, Field, Input, SubmitButton, Textarea } from "@/components/ui/Form";
 
 const EMPTY: ActionState = {};
 
 /**
- * Approvals and stations — read-only registry facts, each with a "propose a
- * change" form. Nothing here writes to the scraped tables; every submission
- * becomes a change request for an admin to apply. Both panels are exported
- * individually and shown as tabs by `DashboardTabs`. (Per-station scope, which
- * publishes instantly, lives in its own `StationScopeEditor`.)
+ * Approvals — the one thing an organisation cannot publish itself.
+ *
+ * They are regulatory facts from the authorities' registers, so a change here
+ * becomes a change request for an admin to apply. Everything else the dashboard
+ * edits (profile, stations, contacts and both levels of scope) writes straight
+ * to the real tables.
  */
 
 // ------------------------------------------------------------- approvals ---
@@ -36,8 +31,7 @@ export function ApprovalsPanel({
   org: DashboardOrg;
   authorities: AuthorityOption[];
 }) {
-  // Which approval's inline form is open, and whether it's an edit or a removal
-  // — same shape as StationsPanel, so both tabs behave identically.
+  // Which approval's inline form is open, and whether it's an edit or a removal.
   const [open, setOpen] = useState<{
     id: string;
     mode: "update" | "remove";
@@ -124,8 +118,7 @@ export function ApprovalsPanel({
         </ul>
       )}
 
-      {/* Add approval — its own card below the list, boxed like the Scope
-          tab's "New scope line" so a multi-field form has room to breathe. */}
+      {/* Add approval — its own card below the list. */}
       {addOpen ? (
         <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -273,267 +266,3 @@ function ApprovalForm({
     </form>
   );
 }
-
-// -------------------------------------------------------------- stations ---
-
-export function StationsPanel({ org }: { org: DashboardOrg }) {
-  // Which station's inline form is open, and whether it's an edit or a removal.
-  const [open, setOpen] = useState<{
-    id: string;
-    mode: "update" | "remove";
-  } | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-
-  return (
-    <div className="space-y-3">
-      {org.stations.length === 0 ? (
-        <p className="text-sm text-white/35">
-          You don&rsquo;t appear at any airport yet.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {org.stations.map((s) => {
-            const editing = open?.id === s.id && open.mode === "update";
-            const removing = open?.id === s.id && open.mode === "remove";
-
-            if (editing || removing) {
-              return (
-                <li
-                  key={s.id}
-                  className="rounded-[2px] border border-white/10 bg-black/30 p-4"
-                >
-                  {editing ? (
-                    <StationForm
-                      org={org}
-                      station={s}
-                      onDone={() => setOpen(null)}
-                    />
-                  ) : (
-                    <RemoveStationForm
-                      org={org}
-                      station={s}
-                      onDone={() => setOpen(null)}
-                    />
-                  )}
-                </li>
-              );
-            }
-
-            return (
-              <li
-                key={s.id}
-                className="flex items-start justify-between gap-4 rounded-[2px]
-                  border border-white/10 bg-black/30 p-4"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm text-white/90">
-                    {s.iata || s.icao ? (
-                      <span className="mr-2 font-mono text-xs text-accent">
-                        {s.iata ?? s.icao}
-                      </span>
-                    ) : null}
-                    {s.airportName ?? "Unknown airport"}
-                    {s.isBase ? (
-                      <span
-                        className="ml-2 rounded-[2px] border border-accent/40 bg-accent/10
-                          px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-accent-bright"
-                        title="A main base for this organisation"
-                      >
-                        Base
-                      </span>
-                    ) : null}
-                  </p>
-                  {s.address || s.phone || s.email ? (
-                    <p className="mt-0.5 truncate text-xs text-white/35">
-                      {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOpen({ id: s.id, mode: "update" })}
-                    className="text-xs text-white/45 transition hover:text-white"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOpen({ id: s.id, mode: "remove" })}
-                    className="text-xs text-white/45 transition hover:text-red-300"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {/* Add station — its own card below the list, boxed like the Scope
-          tab's "New scope line" so a multi-field form has room to breathe. */}
-      {addOpen ? (
-        <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide2 text-white/45">
-              Add a station
-            </span>
-            <button
-              type="button"
-              onClick={() => setAddOpen(false)}
-              className="text-xs text-white/35 transition hover:text-white/70"
-            >
-              Close
-            </button>
-          </div>
-          <StationForm org={org} station={null} onDone={() => setAddOpen(false)} />
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className="rounded-[2px] border border-dashed border-white/10 px-4 py-2 text-sm
-            text-white/45 transition hover:border-white/25 hover:text-white"
-        >
-          + Add a station
-        </button>
-      )}
-    </div>
-  );
-}
-
-/**
- * Add or correct a station. Publishes instantly — it writes the organisation's
- * own override row, never the scraped table, so a re-scrape can't undo it.
- *
- * An existing station is keyed by its airport (the pair the override keys on),
- * so the airport itself isn't editable here: moving to another airport is
- * removing this one and adding that one.
- */
-function StationForm({
-  org,
-  station,
-  onDone,
-}: {
-  org: DashboardOrg;
-  station: DashboardStation | null;
-  onDone: () => void;
-}) {
-  const [state, action] = useFormState(saveStationAction, EMPTY);
-  const isNew = station === null;
-
-  return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name="organisationId" value={org.id} />
-      {station?.airportId ? (
-        <input type="hidden" name="airportId" value={station.airportId} />
-      ) : null}
-
-      {state.error ? <Alert kind="error">{state.error}</Alert> : null}
-      {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
-
-      {!isNew ? (
-        <p className="text-sm text-white/90">
-          {station.iata || station.icao ? (
-            <span className="mr-2 font-mono text-xs text-accent">
-              {station.iata ?? station.icao}
-            </span>
-          ) : null}
-          {station.airportName ?? "Unknown airport"}
-        </p>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {isNew ? (
-          <Field label="Airport code" hint="IATA or ICAO">
-            <Input name="airportCode" placeholder="FRA / EDDF" />
-          </Field>
-        ) : null}
-        <Field label="Phone">
-          <Input name="phone" defaultValue={station?.phone ?? ""} />
-        </Field>
-        <Field label="E-mail">
-          <Input name="email" type="email" defaultValue={station?.email ?? ""} />
-        </Field>
-        <Field label="Address">
-          <Input name="address" defaultValue={station?.address ?? ""} />
-        </Field>
-      </div>
-
-      <label className="flex items-center gap-2.5 text-sm text-white/70">
-        <input
-          type="checkbox"
-          name="isBase"
-          defaultChecked={station?.isBase ?? false}
-          className="h-4 w-4 shrink-0 accent-accent"
-        />
-        This station is a main base
-        <span className="text-xs text-white/35">
-          (base maintenance, not just line)
-        </span>
-      </label>
-
-      <div className="flex items-center gap-2">
-        <SubmitButton pendingLabel="Saving…">
-          {isNew ? "Add station" : "Save station"}
-        </SubmitButton>
-        <button
-          type="button"
-          onClick={onDone}
-          className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
-
-/**
- * Removing a station takes the organisation off that airport on the public map
- * straight away, so it asks first — unlike the one-click Remove on contacts and
- * scope lines, which are cheap to retype.
- */
-function RemoveStationForm({
-  org,
-  station,
-  onDone,
-}: {
-  org: DashboardOrg;
-  station: DashboardStation;
-  onDone: () => void;
-}) {
-  const [state, action] = useFormState(deleteStationAction, EMPTY);
-
-  return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name="organisationId" value={org.id} />
-      <input type="hidden" name="airportId" value={station.airportId ?? ""} />
-
-      {state.error ? <Alert kind="error">{state.error}</Alert> : null}
-      {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
-
-      <p className="text-sm text-white/60">
-        Remove{" "}
-        <span className="text-white/90">
-          {station.airportName ?? "this station"}
-        </span>{" "}
-        from your listing? You disappear from that airport on the map straight
-        away. You can add it back later.
-      </p>
-
-      <div className="flex items-center gap-2">
-        <SubmitButton pendingLabel="Removing…">Remove station</SubmitButton>
-        <button
-          type="button"
-          onClick={onDone}
-          className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
-

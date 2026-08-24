@@ -210,404 +210,26 @@ export async function saveProfileAction(
 
 // -------------------------------------------------------------- contacts ---
 
-export async function saveContactAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-  const contactId = nullable(data, "contactId");
-
-  const row = {
-    organisation_id: organisationId,
-    function_label: nullable(data, "functionLabel"),
-    name: nullable(data, "name"),
-    phone: nullable(data, "phone"),
-    email: nullable(data, "email"),
-    hours: nullable(data, "hours"),
-    sort_order: Number(str(data, "sortOrder") || 0),
-  };
-
-  if (!row.function_label && !row.name && !row.phone && !row.email) {
-    return { error: "Give the contact at least a label, phone or e-mail." };
-  }
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-
-    if (contactId) {
-      // Scope the update by organisation too, so a swapped id cannot reach
-      // another organisation's row.
-      const { error } = await supabase
-        .from("organisation_managed_contacts")
-        .update(row)
-        .eq("id", contactId)
-        .eq("organisation_id", organisationId);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from("organisation_managed_contacts")
-        .insert(row);
-      if (error) throw error;
-    }
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: contactId ? "Contact updated." : "Contact added." };
-}
-
-export async function deleteContactAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-  const contactId = str(data, "contactId");
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-    const { error } = await supabase
-      .from("organisation_managed_contacts")
-      .delete()
-      .eq("id", contactId)
-      .eq("organisation_id", organisationId);
-    if (error) throw error;
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: "Contact removed." };
-}
-
 /**
- * Copy the scraped contacts into the managed table so an organisation can start
- * from what is already published instead of retyping it. Once any managed
- * contact exists, the public card shows the managed set only.
+ * Contacts, scope and stations — all instant, all straight to the real tables.
+ *
+ * A claimed organisation owns its rows (migration 0005): there is no override
+ * layer any more, so these write `organisation_contacts`,
+ * `organisation_scope`, `organisation_station_scope` and
+ * `organisation_stations` directly. `requireMember` is the security boundary —
+ * the service_role key means the database will hand over any row it is asked
+ * for, so every action below must check membership before touching anything.
  */
-export async function importScrapedContactsAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-
-    const { data: existing } = await supabase
-      .from("organisation_managed_contacts")
-      .select("id")
-      .eq("organisation_id", organisationId)
-      .limit(1);
-    if (existing && existing.length > 0) {
-      return { error: "You already have contacts here — import would duplicate them." };
-    }
-
-    const { data: scraped, error: readError } = await supabase
-      .from("organisation_contacts")
-      .select("function_label, label, name, phone, email, hours")
-      .eq("organisation_id", organisationId)
-      .limit(20);
-    if (readError) throw readError;
-    if (!scraped || scraped.length === 0) {
-      return { error: "There are no scraped contacts to import." };
-    }
-
-    const rows = (scraped as Record<string, unknown>[]).map((c, i) => ({
-      organisation_id: organisationId,
-      function_label:
-        (c.function_label as string | null) ?? (c.label as string | null) ?? null,
-      name: (c.name as string | null) ?? null,
-      phone: (c.phone as string | null) ?? null,
-      email: (c.email as string | null) ?? null,
-      hours: (c.hours as string | null) ?? null,
-      sort_order: i,
-    }));
-    const { error } = await supabase
-      .from("organisation_managed_contacts")
-      .insert(rows);
-    if (error) throw error;
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  return { notice: "Imported — edit them as you like." };
-}
-
-// ---------------------------------------------------- station scope ---------
-
-/**
- * Per-station certified scope — the lines shown on the public card for each
- * airport. These publish instantly (the organisation stating what it works at a
- * station, not a fact copied from a register), and they live in their own
- * override table so a re-scrape can never wipe them. For any airport the
- * organisation maintains here, the managed rows replace the scraped station
- * scope on the card entirely — the same rule as managed contacts.
- */
-
-function locationScope(data: FormData, key: string): string | null {
-  const v = str(data, key).toLowerCase();
-  return v === "line" || v === "base" || v === "both" ? v : null;
-}
-
-/** Membership already checked — is this airport actually one of the org's? */
-async function orgHasAirport(
-  supabase: ReturnType<typeof getAdminSupabase>,
-  organisationId: string,
-  airportId: string,
-): Promise<string[]> {
-  const { data } = await supabase
-    .from("organisation_stations")
-    .select("id")
-    .eq("organisation_id", organisationId)
-    .eq("airport_id", airportId);
-  return ((data as Record<string, unknown>[]) ?? []).map((r) => String(r.id));
-}
-
-export async function saveStationScopeAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-  const airportId = str(data, "airportId");
-  const scopeId = nullable(data, "scopeId");
-  const scopeText = nullable(data, "scopeText");
-
-  if (!airportId) return { error: "Pick a station first." };
-  if (!scopeText) {
-    return { error: "Enter the scope line — a class on its own has nothing to show." };
-  }
-
-  const row = {
-    organisation_id: organisationId,
-    airport_id: airportId,
-    authority_code: nullable(data, "authorityCode"),
-    rating_class_text: nullable(data, "ratingClass"),
-    scope_text: scopeText,
-    location_scope: locationScope(data, "locationScope"),
-    sort_order: Number(str(data, "sortOrder") || 0),
-  };
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-
-    const stationIds = await orgHasAirport(supabase, organisationId, airportId);
-    if (stationIds.length === 0) {
-      return { error: "You don't have a station at that airport." };
-    }
-
-    if (scopeId) {
-      // Scope the update by organisation too, so a swapped id cannot reach
-      // another organisation's row.
-      const { error } = await supabase
-        .from("organisation_managed_station_scope")
-        .update(row)
-        .eq("id", scopeId)
-        .eq("organisation_id", organisationId);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from("organisation_managed_station_scope")
-        .insert(row);
-      if (error) throw error;
-    }
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: scopeId ? "Scope line updated." : "Scope line added." };
-}
-
-export async function deleteStationScopeAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-  const scopeId = str(data, "scopeId");
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-    const { error } = await supabase
-      .from("organisation_managed_station_scope")
-      .delete()
-      .eq("id", scopeId)
-      .eq("organisation_id", organisationId);
-    if (error) throw error;
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: "Scope line removed." };
-}
-
-/**
- * Copy the scraped station scope for one airport into the managed table so the
- * organisation can edit from what is already published instead of retyping it.
- * From then on the managed rows are what the card shows for that station.
- */
-export async function importStationScopeAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-  const airportId = str(data, "airportId");
-
-  if (!airportId) return { error: "Pick a station first." };
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-
-    const stationIds = await orgHasAirport(supabase, organisationId, airportId);
-    if (stationIds.length === 0) {
-      return { error: "You don't have a station at that airport." };
-    }
-
-    const { data: already } = await supabase
-      .from("organisation_managed_station_scope")
-      .select("id")
-      .eq("organisation_id", organisationId)
-      .eq("airport_id", airportId)
-      .limit(1);
-    if (already && already.length > 0) {
-      return { error: "You already maintain this station's scope." };
-    }
-
-    // Resolve each scraped row to an authority code the same way the card does:
-    // by authority_id, else by matching source_url to one of the org's approvals.
-    const [scopeRes, apprRes, authRes] = await Promise.all([
-      supabase
-        .from("organisation_station_scope")
-        .select(
-          "authority_id, source_url, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope",
-        )
-        .in("station_id", stationIds)
-        .limit(3000),
-      supabase
-        .from("organisation_approvals")
-        .select("source_url, authorities(code)")
-        .eq("organisation_id", organisationId),
-      supabase.from("authorities").select("id, code"),
-    ]);
-
-    const codeById = new Map<string, string>();
-    for (const a of (authRes.data as Record<string, unknown>[]) ?? []) {
-      if (a.code) codeById.set(String(a.id), String(a.code));
-    }
-    const codeBySourceUrl = new Map<string, string>();
-    for (const ap of (apprRes.data as Record<string, unknown>[]) ?? []) {
-      const code = (embeddedCode(ap.authorities) ?? "").trim();
-      const url = (ap.source_url as string | null) ?? null;
-      if (url && code && !codeBySourceUrl.has(url)) codeBySourceUrl.set(url, code);
-    }
-
-    const scraped = (scopeRes.data as Record<string, unknown>[]) ?? [];
-    const rows = scraped
-      .map((s, i) => {
-        const authId = (s.authority_id as string | null) ?? null;
-        const url = (s.source_url as string | null) ?? null;
-        const code =
-          (authId && codeById.get(authId)) ||
-          (url && codeBySourceUrl.get(url)) ||
-          null;
-        const ls = String(s.location_scope ?? "").toLowerCase();
-        return {
-          organisation_id: organisationId,
-          airport_id: airportId,
-          authority_code: code,
-          rating_class_text:
-            (s.rating_class_text_en as string | null) ??
-            (s.rating_class_text as string | null) ??
-            null,
-          scope_text:
-            (s.scope_text_en as string | null) ??
-            (s.scope_text as string | null) ??
-            null,
-          location_scope:
-            ls === "line" || ls === "base" || ls === "both" ? ls : null,
-          sort_order: i,
-        };
-      })
-      .filter((r) => r.scope_text);
-
-    if (rows.length === 0) {
-      return {
-        error:
-          "There is no scraped scope for this station to import — add lines directly.",
-      };
-    }
-
-    const { error } = await supabase
-      .from("organisation_managed_station_scope")
-      .insert(rows);
-    if (error) throw error;
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: "Imported — edit the lines as you like." };
-}
-
-/** Drop every managed line for one airport, so the card falls back to scraped. */
-export async function revertStationScopeAction(
-  _prev: ActionState,
-  data: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const organisationId = str(data, "organisationId");
-  const airportId = str(data, "airportId");
-
-  if (!airportId) return { error: "Pick a station first." };
-
-  try {
-    await requireMember(user, organisationId);
-    const supabase = getAdminSupabase();
-    const { error } = await supabase
-      .from("organisation_managed_station_scope")
-      .delete()
-      .eq("organisation_id", organisationId)
-      .eq("airport_id", airportId);
-    if (error) throw error;
-  } catch (err) {
-    return { error: toMessage(err) };
-  }
-
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: "Reverted to the scraped scope for this station." };
-}
-
-// ------------------------------------------------- stations (instant) ------
-// Stations publish instantly: an organisation knows which airports it works at,
-// and which of them is a base, better than a reviewer does — the same call
-// already made for per-station scope. Nothing is written to the scraper-owned
-// `organisation_stations`; edits go to `organisation_managed_stations` and are
-// merged over the scraped rows at read time. See migration 0004.
 
 /** A checkbox is absent from the form data entirely when unticked. */
 function bool(data: FormData, key: string): boolean {
   const v = data.get(key);
   return v === "on" || v === "true" || v === "1";
+}
+
+function locationScope(data: FormData, key: string): string | null {
+  const v = str(data, key).toLowerCase();
+  return v === "line" || v === "base" || v === "both" ? v : null;
 }
 
 /** Look an airport up by IATA or ICAO code. */
@@ -626,17 +248,339 @@ async function airportIdByCode(
   return data ? String((data as { id: string }).id) : null;
 }
 
-/** "…table not found" from PostgREST means 0004 hasn't been applied yet. */
-function missingStationsTable(err: unknown): boolean {
-  const m = err && typeof err === "object" && "message" in err
-    ? String((err as { message: unknown }).message)
-    : "";
-  return /organisation_managed_stations/i.test(m) &&
-    /(does not exist|not find|schema cache)/i.test(m);
+/** The station must belong to this organisation — never trust a posted id. */
+async function assertOwnStation(
+  supabase: ReturnType<typeof getAdminSupabase>,
+  organisationId: string,
+  stationId: string,
+): Promise<void> {
+  const { data } = await supabase
+    .from("organisation_stations")
+    .select("id")
+    .eq("id", stationId)
+    .eq("organisation_id", organisationId)
+    .maybeSingle();
+  if (!data) throw new ForbiddenError("That station is not yours.");
 }
 
-const MIGRATION_HINT =
-  "Station editing needs migration 0004 (organisation_managed_stations) — apply it in the Supabase SQL editor first.";
+function revalidateOrg(organisationId: string): void {
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+}
+
+// ------------------------------------------------------------- contacts ----
+
+export async function saveContactAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const contactId = str(data, "contactId");
+  // Empty = an organisation-wide desk, shown for stations that have none.
+  const stationId = str(data, "stationId");
+
+  const row = {
+    organisation_id: organisationId,
+    station_id: stationId || null,
+    function_label: nullable(data, "functionLabel"),
+    name: nullable(data, "name"),
+    phone: nullable(data, "phone"),
+    email: nullable(data, "email"),
+    hours: nullable(data, "hours"),
+    sort_order: Number(str(data, "sortOrder") || 0),
+  };
+
+  if (!row.function_label && !row.name && !row.phone && !row.email) {
+    return { error: "Give the desk a name, a phone or an e-mail." };
+  }
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    if (stationId) await assertOwnStation(supabase, organisationId, stationId);
+
+    if (contactId) {
+      const { error } = await supabase
+        .from("organisation_contacts")
+        .update(row)
+        .eq("id", contactId)
+        .eq("organisation_id", organisationId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("organisation_contacts").insert(row);
+      if (error) throw error;
+    }
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: contactId ? "Contact saved." : "Contact added." };
+}
+
+export async function deleteContactAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const contactId = str(data, "contactId");
+  if (!contactId) return { error: "Nothing to remove." };
+
+  try {
+    await requireMember(user, organisationId);
+    const { error } = await getAdminSupabase()
+      .from("organisation_contacts")
+      .delete()
+      .eq("id", contactId)
+      .eq("organisation_id", organisationId);
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: "Contact removed." };
+}
+
+// ---------------------------------------------------------------- scope ----
+
+/** Shared column shape for both scope tables. */
+function scopeRow(data: FormData, organisationId: string) {
+  const approvalId = str(data, "approvalId");
+  return {
+    organisation_id: organisationId,
+    organisation_approval_id: approvalId || null,
+    rating_class_text: nullable(data, "ratingClass"),
+    scope_text: nullable(data, "scopeText"),
+    location_scope: locationScope(data, "locationScope"),
+  };
+}
+
+/** Copy the approval's authority onto the line, so the card groups it right. */
+async function authorityForApproval(
+  supabase: ReturnType<typeof getAdminSupabase>,
+  organisationId: string,
+  approvalId: string | null,
+): Promise<{ authority_id: string | null; authority_text: string | null }> {
+  if (!approvalId) return { authority_id: null, authority_text: null };
+  const { data } = await supabase
+    .from("organisation_approvals")
+    .select("authority_id, authorities(code)")
+    .eq("id", approvalId)
+    .eq("organisation_id", organisationId)
+    .maybeSingle();
+  if (!data) throw new ForbiddenError("That approval is not yours.");
+  const row = data as Record<string, unknown>;
+  return {
+    authority_id: (row.authority_id as string | null) ?? null,
+    authority_text: embeddedCode(row.authorities),
+  };
+}
+
+export async function saveOrgScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const scopeId = str(data, "scopeId");
+  const row = scopeRow(data, organisationId);
+
+  if (!row.scope_text) {
+    return { error: "Enter the scope line — a class on its own has nothing to show." };
+  }
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    const auth = await authorityForApproval(
+      supabase,
+      organisationId,
+      row.organisation_approval_id,
+    );
+    const full = { ...row, ...auth };
+
+    if (scopeId) {
+      const { error } = await supabase
+        .from("organisation_scope")
+        .update(full)
+        .eq("id", scopeId)
+        .eq("organisation_id", organisationId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("organisation_scope").insert(full);
+      if (error) throw error;
+    }
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: scopeId ? "Scope line saved." : "Scope line added." };
+}
+
+export async function deleteOrgScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const scopeId = str(data, "scopeId");
+  if (!scopeId) return { error: "Nothing to remove." };
+
+  try {
+    await requireMember(user, organisationId);
+    const { error } = await getAdminSupabase()
+      .from("organisation_scope")
+      .delete()
+      .eq("id", scopeId)
+      .eq("organisation_id", organisationId);
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: "Scope line removed." };
+}
+
+// -------------------------------------------------------- station scope ----
+
+export async function saveStationScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const stationId = str(data, "stationId");
+  const scopeId = str(data, "scopeId");
+  const row = scopeRow(data, organisationId);
+
+  if (!stationId) return { error: "Pick a station first." };
+  if (!row.scope_text) {
+    return { error: "Enter the scope line — a class on its own has nothing to show." };
+  }
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    await assertOwnStation(supabase, organisationId, stationId);
+    const auth = await authorityForApproval(
+      supabase,
+      organisationId,
+      row.organisation_approval_id,
+    );
+    const full = { ...row, ...auth, station_id: stationId };
+
+    if (scopeId) {
+      const { error } = await supabase
+        .from("organisation_station_scope")
+        .update(full)
+        .eq("id", scopeId)
+        .eq("organisation_id", organisationId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("organisation_station_scope").insert(full);
+      if (error) throw error;
+    }
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: scopeId ? "Scope line saved." : "Scope line added." };
+}
+
+export async function deleteStationScopeAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const scopeId = str(data, "scopeId");
+  if (!scopeId) return { error: "Nothing to remove." };
+
+  try {
+    await requireMember(user, organisationId);
+    const { error } = await getAdminSupabase()
+      .from("organisation_station_scope")
+      .delete()
+      .eq("id", scopeId)
+      .eq("organisation_id", organisationId);
+    if (error) throw error;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: "Scope line removed." };
+}
+
+/**
+ * Copy the organisation's own certified scope onto one station, so a station
+ * that works everything the organisation is approved for can be filled in one
+ * click and then trimmed line by line.
+ */
+export async function importOrgScopeToStationAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const stationId = str(data, "stationId");
+  if (!stationId) return { error: "Pick a station first." };
+
+  let copied = 0;
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    await assertOwnStation(supabase, organisationId, stationId);
+
+    const { data: orgScope, error: readErr } = await supabase
+      .from("organisation_scope")
+      .select(
+        "organisation_approval_id, authority_id, authority_text, rating_class_text, scope_text, location_scope",
+      )
+      .eq("organisation_id", organisationId)
+      .limit(3000);
+    if (readErr) throw readErr;
+
+    const rows = ((orgScope as Record<string, unknown>[]) ?? []).map((r) => ({
+      organisation_id: organisationId,
+      station_id: stationId,
+      organisation_approval_id: r.organisation_approval_id ?? null,
+      authority_id: r.authority_id ?? null,
+      authority_text: r.authority_text ?? null,
+      rating_class_text: r.rating_class_text ?? null,
+      scope_text: r.scope_text ?? null,
+      location_scope: r.location_scope ?? null,
+    }));
+    if (rows.length === 0) {
+      return { error: "There is no organisation scope to import yet." };
+    }
+
+    // Replace what the station has, so importing twice doesn't double it up.
+    const { error: delErr } = await supabase
+      .from("organisation_station_scope")
+      .delete()
+      .eq("organisation_id", organisationId)
+      .eq("station_id", stationId);
+    if (delErr) throw delErr;
+
+    const { error } = await supabase.from("organisation_station_scope").insert(rows);
+    if (error) throw error;
+    copied = rows.length;
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
+
+  revalidateOrg(organisationId);
+  return { notice: `Imported ${copied} scope line${copied === 1 ? "" : "s"}.` };
+}
+
+// ------------------------------------------------------------- stations ----
 
 export async function saveStationAction(
   _prev: ActionState,
@@ -644,46 +588,54 @@ export async function saveStationAction(
 ): Promise<ActionState> {
   const user = await requireUser();
   const organisationId = str(data, "organisationId");
-  // An existing station is edited by airport (the pair the override keys on);
-  // a new one is named by its IATA/ICAO code.
-  const knownAirportId = str(data, "airportId");
+  const stationId = str(data, "stationId");
   const airportCode = str(data, "airportCode");
+
+  const details = {
+    address: nullable(data, "address"),
+    phone: nullable(data, "phone"),
+    email: nullable(data, "email"),
+    is_base: bool(data, "isBase"),
+  };
 
   try {
     await requireMember(user, organisationId);
     const supabase = getAdminSupabase();
 
-    let airportId = knownAirportId;
-    if (!airportId) {
+    if (stationId) {
+      await assertOwnStation(supabase, organisationId, stationId);
+      const { error } = await supabase
+        .from("organisation_stations")
+        .update(details)
+        .eq("id", stationId)
+        .eq("organisation_id", organisationId);
+      if (error) throw error;
+    } else {
       if (!airportCode) return { error: "Enter the airport's IATA or ICAO code." };
-      const found = await airportIdByCode(supabase, airportCode);
-      if (!found) {
+      const airportId = await airportIdByCode(supabase, airportCode);
+      if (!airportId) {
         return { error: `No airport matches “${airportCode}”. Check the code.` };
       }
-      airportId = found;
+      const { data: existing } = await supabase
+        .from("organisation_stations")
+        .select("id")
+        .eq("organisation_id", organisationId)
+        .eq("airport_id", airportId)
+        .maybeSingle();
+      if (existing) {
+        return { error: "You already have a station at that airport." };
+      }
+      const { error } = await supabase
+        .from("organisation_stations")
+        .insert({ organisation_id: organisationId, airport_id: airportId, ...details });
+      if (error) throw error;
     }
-
-    const { error } = await supabase.from("organisation_managed_stations").upsert(
-      {
-        organisation_id: organisationId,
-        airport_id: airportId,
-        address: nullable(data, "address"),
-        phone: nullable(data, "phone"),
-        email: nullable(data, "email"),
-        is_base: bool(data, "isBase"),
-        removed: false,
-      },
-      { onConflict: "organisation_id,airport_id" },
-    );
-    if (error) throw error;
   } catch (err) {
-    if (missingStationsTable(err)) return { error: MIGRATION_HINT };
     return { error: toMessage(err) };
   }
 
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: knownAirportId ? "Station updated." : "Station added." };
+  revalidateOrg(organisationId);
+  return { notice: stationId ? "Station updated." : "Station added." };
 }
 
 export async function deleteStationAction(
@@ -692,35 +644,38 @@ export async function deleteStationAction(
 ): Promise<ActionState> {
   const user = await requireUser();
   const organisationId = str(data, "organisationId");
-  const airportId = str(data, "airportId");
-
-  if (!airportId) return { error: "Pick a station first." };
+  const stationId = str(data, "stationId");
+  if (!stationId) return { error: "Pick a station first." };
 
   try {
     await requireMember(user, organisationId);
     const supabase = getAdminSupabase();
-    // A tombstone, not a delete: the scraped row stays and would come back on
-    // the next run, so removal has to be recorded rather than applied.
-    const { error } = await supabase.from("organisation_managed_stations").upsert(
-      {
-        organisation_id: organisationId,
-        airport_id: airportId,
-        removed: true,
-      },
-      { onConflict: "organisation_id,airport_id" },
-    );
+    await assertOwnStation(supabase, organisationId, stationId);
+    // Its scope and desks point at it; clear them so nothing is orphaned.
+    await supabase
+      .from("organisation_station_scope")
+      .delete()
+      .eq("organisation_id", organisationId)
+      .eq("station_id", stationId);
+    await supabase
+      .from("organisation_contacts")
+      .delete()
+      .eq("organisation_id", organisationId)
+      .eq("station_id", stationId);
+    const { error } = await supabase
+      .from("organisation_stations")
+      .delete()
+      .eq("id", stationId)
+      .eq("organisation_id", organisationId);
     if (error) throw error;
   } catch (err) {
-    if (missingStationsTable(err)) return { error: MIGRATION_HINT };
     return { error: toMessage(err) };
   }
 
-  revalidatePath(`/dashboard/${organisationId}`);
-  revalidatePath("/");
-  return { notice: "Station removed from your listing." };
+  revalidateOrg(organisationId);
+  return { notice: "Station removed." };
 }
 
-/** PostgREST returns an embedded relation as an object or a one-element array. */
 function embeddedCode(value: unknown): string | null {
   if (!value) return null;
   const obj = Array.isArray(value) ? value[0] : value;

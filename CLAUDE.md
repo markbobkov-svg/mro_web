@@ -115,12 +115,13 @@ below applies only to signed-in requests.
 ## Organisation dashboard (`/dashboard`, `/admin`)
 
 Part-145 organisations claim their listing and maintain it themselves.
-Migrations: `supabase/migrations/0001_org_dashboard.sql` (accounts, claims,
-moderation, the profile/contacts override layer),
-`supabase/migrations/0002_managed_station_scope.sql` (the per-station scope
-override layer) and `supabase/migrations/0004_managed_stations.sql` (the station
-override layer — presence, contact details and `is_base`). All are applied by
-hand in the Supabase SQL editor.
+Migrations, all applied by hand in the Supabase SQL editor:
+`0001_org_dashboard.sql` (accounts, claims, moderation),
+`0002_managed_station_scope.sql` and `0004_managed_stations.sql` (the old
+override layer), then **`0005_org_owned_data.sql`**, which folds that layer back
+into the real tables, drops it, and hands claimed organisations ownership of
+their own rows. 0002 and 0004 are kept only so the history reads straight —
+0005 supersedes both.
 
 - **Accounts** are Supabase Auth, e-mail + password, confirmation required.
   All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
@@ -130,54 +131,46 @@ hand in the Supabase SQL editor.
   spot; anything else queues for manual review. Free-mail domains never
   auto-approve. Organisations *not yet in the DB* are always reviewed by hand,
   and the organisation row is created on approval.
-- **What an organisation may edit directly:** profile (tagline, description,
-  logo, website/e-mail/phone/address overrides, AOG desk), contacts, the
-  **per-station certified scope** shown on its card (the Scope tab), and its
-  **stations** — which airports it works at, their contact details and which of
-  them are a **main base** (`is_base`). These publish immediately.
-- **What goes through moderation:** approvals — regulatory facts from the
+- **What an organisation may edit directly — everything except approvals:**
+  profile; its **stations** (which airports it works at, their details, and
+  which are a **main base**); the **desks** at each station; its own
+  **certified scope** (`organisation_scope`); and the **scope per station**
+  (`organisation_station_scope`) that its card shows at each airport. All of it
+  publishes immediately, straight to the real tables.
+- **What goes through moderation:** approvals only — regulatory facts from the
   authorities' registers. Organisations file change requests; an admin applies
-  them from `/admin`. (Per-station scope and stations used to be here too, but
-  an organisation knows where it works, and what it works there, better than a
-  reviewer does, so both moved to instant-publish via their own override tables
-  — see below.)
+  them from `/admin`.
+- **Scope has two levels.** The Scope tab is what the organisation is approved
+  for overall; the Station scope tab is what it actually works at one airport.
+  A station can import the organisation's whole scope in one click and then trim
+  it line by line, or be filled in from scratch. Every line carries an
+  **approval** dropdown so it is tied to the certificate that covers it.
 - **Admin** is the `app_users.is_admin` flag; there is no separate role table.
 
-### The rule that keeps scraper and dashboard from fighting
+### Claimed organisations own their data
 
-The scraper owns `organisations`, `organisation_approvals`, `organisation_scope`,
-`organisation_stations`, `organisation_station_scope` and re-writes them on every
-run. **Nothing an organisation types is ever stored in those tables.** Edits live
-in `organisation_profiles`, `organisation_managed_contacts`,
-`organisation_managed_station_scope` and `organisation_managed_stations`, and are
-merged *over* the scraped rows at read time in `getAirportDetail`, so a re-scrape
-cannot wipe them. Precedence is organisation → station → scraped organisation
-row; an organisation that adds any managed contact replaces the scraped contact
-list outright.
+Up to migration `0005` an organisation's edits lived in a parallel "managed"
+override layer that was merged over the scraped rows at read time. That is gone.
+**Once a listing is claimed, the organisation owns its rows**: the dashboard
+writes straight to `organisations`, `organisation_stations`,
+`organisation_contacts`, `organisation_scope` and `organisation_station_scope`,
+and the map reads exactly those rows. `organisations.claimed_at` marks it, and a
+membership grant sets it automatically.
 
-The per-station scope override follows the same "once you touch it, you own it"
-rule, per station: for any airport an organisation maintains, its managed lines
-replace the scraped `organisation_station_scope` for that station on the card.
-It keys on `(organisation_id, airport_id)`, **not** `station_id`, so it survives
-the scraper regenerating station rows — the id it can churn is never the id we
-key our own rows off. Authority is stored as the code the organisation types
-(`EASA`, `FAA`) and matched to `authorities.code` at read time.
+The scraper built the initial database and keeps unclaimed listings fresh; it
+must **not** touch a claimed one. A trigger (`guard_claimed_organisation`)
+enforces that for every role except `service_role`.
 
-`organisation_managed_stations` (migration `0004`) does the same for the stations
-themselves, keyed on the same `(organisation_id, airport_id)` pair: a managed row
-replaces that airport's contact details and carries `is_base`; `removed = true` is
-a **tombstone** (the scraped row can't be deleted — the next run would bring it
-back — so "not at this airport" has to be recorded); and a managed row at an
-airport with no scraped station adds one. Because this decides *presence*, it is
-merged in every path that places an organisation on the map —
-`getAirportMarkers`, `getAirportDetail`, the search index and `getDashboardOrg`
-(see `src/lib/managedStations.ts`). All of them soft-fail to "no overrides" if
-0004 hasn't been applied, so the map keeps working either way.
+> **Caveat, and it matters:** the app and `data_scraper` currently share one
+> credential — `SUPABASE_KEY`, a service_role key — and service_role bypasses
+> RLS and is exempt from the guard, so *no database rule can tell the two apart*
+> while that holds. Give `data_scraper` its own (non-service_role) key and the
+> trigger blocks it with no scraper code change; otherwise it must skip rows
+> where `claimed_at is not null`.
 
-The one place this does not hold is an **admin-approved change request**, which
-writes to the scraped tables by design — so a later scrape can revert it. If
-that starts to bite, teach `data_scraper` to leave rows it did not produce
-alone.
+`organisation_contacts.station_id` ties a desk to one station. A contact with no
+station is organisation-wide and is the fallback shown for any station that has
+no desks of its own.
 
 ### Security boundary — read before touching the dashboard
 

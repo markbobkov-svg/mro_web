@@ -2,7 +2,6 @@ import "server-only";
 
 import { getSupabase } from "./supabase";
 import { resolveCoordinates } from "./airportCoords";
-import { fetchManagedStations, stationKey } from "./managedStations";
 import type {
   AirportMarker,
   AirportDetail,
@@ -76,26 +75,6 @@ export async function getAirportMarkers(orgScope?: string[] | null): Promise<{
     if (data.length < PAGE) break;
   }
 
-  // Organisation-owned station overrides (migration 0004) decide presence too:
-  // a removed station drops the organisation from that airport, a managed one
-  // the scrape missed adds it. Soft-fails to no overrides before the migration.
-  for (const m of await fetchManagedStations(supabase, {
-    organisationIds: scope,
-    all: true,
-  })) {
-    if (m.removed) {
-      airportOrgs.get(m.airportId)?.delete(m.organisationId);
-    } else {
-      let set = airportOrgs.get(m.airportId);
-      if (!set) {
-        set = new Set();
-        airportOrgs.set(m.airportId, set);
-      }
-      set.add(m.organisationId);
-    }
-  }
-  // An airport whose last organisation was removed is no longer a marker.
-  for (const [id, orgs] of airportOrgs) if (orgs.size === 0) airportOrgs.delete(id);
 
   const airportIds = Array.from(airportOrgs.keys());
   if (airportIds.length === 0) return { markers: [], organisationCount: 0 };
@@ -235,47 +214,19 @@ export async function getAirportDetail(
     .eq("airport_id", airportId);
   if (scope) stationsQuery = stationsQuery.in("organisation_id", scope);
 
-  const [
-    { data: airport, error: aErr },
-    { data: stations, error: sErr },
-    managedStations,
-  ] = await Promise.all([
+  const [{ data: airport, error: aErr }, { data: stations, error: sErr }] =
+    await Promise.all([
       supabase
         .from("airports")
         .select("id, iata_code, icao_code, name, city, country_code")
         .eq("id", airportId)
         .maybeSingle(),
       stationsQuery,
-      fetchManagedStations(supabase, { airportId, organisationIds: scope }),
     ]);
   if (aErr) throw new Error(`getAirportDetail(airport): ${aErr.message}`);
   if (sErr) throw new Error(`getAirportDetail(stations): ${sErr.message}`);
 
-  // Merge the organisation-owned station overrides (migration 0004) over the
-  // scraped rows: a managed row replaces that station's details, `removed`
-  // hides it, and a managed row with no scraped station adds one. Everything
-  // below is keyed off these rows, so doing it here covers the whole card.
-  const managedHere = new Map(managedStations.map((m) => [m.organisationId, m]));
-  const stationRows = ((stations as any[]) ?? [])
-    .filter((s) => !managedHere.get(s.organisation_id)?.removed)
-    .map((s) => {
-      const m = managedHere.get(s.organisation_id);
-      return m ? { ...s, address: m.address, phone: m.phone, email: m.email } : s;
-    });
-  const scrapedOrgIds = new Set(((stations as any[]) ?? []).map((s) => s.organisation_id));
-  for (const m of managedStations) {
-    if (m.removed || scrapedOrgIds.has(m.organisationId)) continue;
-    stationRows.push({
-      // No scraped station to point at — a synthetic id keeps this row distinct
-      // and simply matches no scraped per-station scope, which is correct.
-      id: `managed:${stationKey(m.organisationId, m.airportId)}`,
-      organisation_id: m.organisationId,
-      address: m.address,
-      phone: m.phone,
-      email: m.email,
-      country_code: null,
-    });
-  }
+  const stationRows = (stations as any[]) ?? [];
 
   const airportInfo = {
     id: airportId,
@@ -291,11 +242,7 @@ export async function getAirportDetail(
   }
 
   const orgIds = uniq(stationRows.map((s) => s.organisation_id).filter(Boolean));
-  // Only real scraped ids go to the DB — a managed-added station's synthetic id
-  // is not a uuid, and there is no scraped per-station scope to look up for it.
-  const stationIds = stationRows
-    .map((s) => String(s.id))
-    .filter((id) => !id.startsWith("managed:"));
+  const stationIds = stationRows.map((s) => s.id);
 
   const [
     orgsRes,
@@ -304,9 +251,7 @@ export async function getAirportDetail(
     contactsRes,
     authRes,
     profilesRes,
-    managedContactsRes,
     membersRes,
-    managedStationScopeRes,
   ] = await Promise.all([
       supabase
         .from("organisations")
@@ -338,26 +283,9 @@ export async function getAirportDetail(
         )
         .in("organisation_id", orgIds),
       supabase
-        .from("organisation_managed_contacts")
-        .select("organisation_id, function_label, name, phone, email, hours, sort_order")
-        .in("organisation_id", orgIds)
-        .order("sort_order"),
-      supabase
         .from("organisation_members")
         .select("organisation_id")
         .in("organisation_id", orgIds),
-      // Organisation-owned per-station scope override, for the stations at THIS
-      // airport. Keyed by (organisation_id, airport_id); replaces the scraped
-      // station scope for any org that maintains it here. Additive: if the table
-      // is missing (migration not applied) the query errors softly and the card
-      // falls back to the scraped scope below.
-      supabase
-        .from("organisation_managed_station_scope")
-        .select(
-          "organisation_id, airport_id, authority_code, rating_class_text, scope_text, location_scope, sort_order",
-        )
-        .eq("airport_id", airportId)
-        .order("sort_order"),
     ]);
 
   for (const [label, res] of [
@@ -388,21 +316,6 @@ export async function getAirportDetail(
     }
   }
 
-  const managedByOrg = new Map<string, Contact[]>();
-  if (!managedContactsRes.error) {
-    for (const c of (managedContactsRes.data as any[]) ?? []) {
-      if (!c.phone && !c.email && !c.name && !c.function_label) continue;
-      const list = managedByOrg.get(c.organisation_id) ?? [];
-      list.push({
-        label: c.function_label ?? null,
-        name: c.name ?? null,
-        phone: c.phone ?? null,
-        email: c.email ?? null,
-        hours: c.hours ?? null,
-      });
-      managedByOrg.set(c.organisation_id, list);
-    }
-  }
 
   const orgById = new Map<string, any>();
   for (const o of (orgsRes.data as any[]) ?? []) orgById.set(o.id, o);
@@ -413,8 +326,8 @@ export async function getAirportDetail(
     authById.set(a.id, { code: a.code, name: a.name ?? null });
   }
 
-  // authority code (upper-cased) -> id, so an organisation's managed scope, which
-  // carries a typed authority code rather than an id, lands in the right group.
+  // authority code (upper-cased) -> id, for scope rows that carry a typed
+  // authority code rather than an id.
   const codeToAuthId = new Map<string, string>();
   for (const [id, meta] of authById) {
     if (meta.code) codeToAuthId.set(meta.code.toUpperCase(), id);
@@ -438,43 +351,7 @@ export async function getAirportDetail(
     }
   }
 
-  // Organisation-owned station scope overrides the scraped station scope: for any
-  // org that maintains its own scope at this airport, drop its scraped station
-  // rows and substitute the managed ones (normalised to the scraped shape, and
-  // tagged to that org's station(s) here so line/base still key per station).
-  // Same "once you touch it, you own it" rule as managed contacts. Missing table
-  // => empty map => the scraped scope shows unchanged.
-  const managedScopeByOrg = new Map<string, any[]>();
-  if (!managedStationScopeRes.error) {
-    for (const m of (managedStationScopeRes.data as any[]) ?? []) {
-      const list = managedScopeByOrg.get(m.organisation_id) ?? [];
-      list.push(m);
-      managedScopeByOrg.set(m.organisation_id, list);
-    }
-  }
-
-  const effectiveScopeRows: any[] = [];
-  for (const sc of scopeRows) {
-    if (!managedScopeByOrg.has(sc.organisation_id)) effectiveScopeRows.push(sc);
-  }
-  for (const s of stationRows) {
-    const managed = managedScopeByOrg.get(s.organisation_id);
-    if (!managed) continue;
-    for (const m of managed) {
-      effectiveScopeRows.push({
-        organisation_id: s.organisation_id,
-        station_id: s.id,
-        authority_id:
-          codeToAuthId.get(String(m.authority_code ?? "").toUpperCase()) ?? null,
-        rating_class_text: m.rating_class_text,
-        rating_class_text_en: null,
-        scope_text: m.scope_text,
-        scope_text_en: null,
-        location_scope: m.location_scope,
-        source_url: null,
-      });
-    }
-  }
+  const effectiveScopeRows: any[] = scopeRows;
 
   // --- per-station scope: group org -> authority -> class -> items ---
   // Classes are keyed case-insensitively so scraped variants like
@@ -567,7 +444,7 @@ export async function getAirportDetail(
   }
 
   // Per-station line/base summary (the org header badge), from the same
-  // station-scope rows (managed override applied) now that they are fetched with
+  // station-scope rows now that they are fetched with
   // location_scope.
   const stationLocScope = new Map<string, (string | null)[]>();
   for (const sc of effectiveScopeRows) {
@@ -622,7 +499,6 @@ export async function getAirportDetail(
   const organisations: OrgAtAirport[] = stationRows.map((s) => {
     const org = orgById.get(s.organisation_id) ?? {};
     const profile = profileByOrg.get(s.organisation_id) ?? null;
-    const managed = managedByOrg.get(s.organisation_id);
 
     // Precedence, most specific first: what the organisation typed, then the
     // station's own details, then the organisation-level scraped values.
@@ -638,9 +514,7 @@ export async function getAirportDetail(
       email: profile?.email ?? s.email ?? org.email ?? null,
       website: profile?.website ?? org.website ?? null,
       authorities: buildAuthorities(s.organisation_id),
-      // An organisation that maintains its own contacts replaces the scraped
-      // ones outright — a half-merged list would show stale desks next to live.
-      contacts: (managed ?? contactsByOrg.get(s.organisation_id) ?? []).slice(0, 4),
+      contacts: (contactsByOrg.get(s.organisation_id) ?? []).slice(0, 4),
       claimed: claimedOrgs.has(s.organisation_id),
       tagline: profile?.tagline ?? null,
       description: profile?.description ?? null,

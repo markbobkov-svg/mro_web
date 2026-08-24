@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 
 import type { AuthorityOption, DashboardOrg } from "@/lib/dashboard";
 import { ProfileForm } from "./ProfileForm";
-import { ContactsEditor } from "./ContactsEditor";
-import { ApprovalsPanel, StationsPanel } from "./RegulatorySections";
-import { StationScopeEditor } from "./StationScopeEditor";
+import { ApprovalsPanel } from "./RegulatorySections";
+import { StationsPanel } from "./StationsPanel";
+import { OrgScopePanel, StationScopePanel } from "./ScopeSections";
 import { ChangeRequestList } from "./ChangeRequestList";
 
 /**
@@ -16,15 +16,16 @@ import { ChangeRequestList } from "./ChangeRequestList";
  * half-typed profile or an open change form survives a tab switch. The active
  * tab is mirrored into the URL hash, which keeps the old `#contacts`-style deep
  * links working and lets a tab be bookmarked. Each heading carries a badge that
- * says whether edits publish instantly (profile, contacts) or go through review
- * (the registry facts) — the one distinction that governs the whole dashboard.
+ * says whether edits publish instantly (everything the organisation owns) or go
+ * through review (approvals, the one registry fact it cannot publish itself) —
+ * the one distinction that governs the whole dashboard.
  */
 
 type TabKey =
   | "profile"
-  | "contacts"
   | "approvals"
   | "scope"
+  | "station-scope"
   | "stations"
   | "requests";
 
@@ -47,13 +48,6 @@ const TABS: TabDef[] = [
     publish: "instant",
   },
   {
-    key: "contacts",
-    label: "Contacts",
-    title: "Contacts",
-    note: "The desks operators call. Once you add one, your contacts replace the scraped ones on your card.",
-    publish: "instant",
-  },
-  {
     key: "approvals",
     label: "Approvals",
     title: "Approvals",
@@ -64,21 +58,28 @@ const TABS: TabDef[] = [
     key: "scope",
     label: "Scope",
     title: "Certified scope",
-    note: "The scope shown on your card, per station. Pick a station and edit its lines — changes go live immediately.",
+    note: "Everything you are approved for. A station can import this list and then trim it.",
+    publish: "instant",
+  },
+  {
+    key: "station-scope",
+    label: "Station scope",
+    title: "Scope per station",
+    note: "What you actually work at each airport — this is what shows on your card there.",
     publish: "instant",
   },
   {
     key: "stations",
     label: "Stations",
-    title: "Stations",
-    note: "The airports where you appear on the map. Mark the ones that are a main base — changes go live immediately.",
+    title: "Stations & contacts",
+    note: "The airports where you appear on the map, the desks operators call at each, and which are a main base.",
     publish: "instant",
   },
   {
     key: "requests",
     label: "Requests",
     title: "Change requests",
-    note: "Corrections to approvals, scope and stations are checked before they go live — track their status here.",
+    note: "Approval corrections are checked before they go live — track their status here.",
     publish: "status",
   },
 ];
@@ -194,12 +195,12 @@ function PanelBody({
   switch (tab) {
     case "profile":
       return <ProfileForm org={org} />;
-    case "contacts":
-      return <ContactsEditor org={org} />;
     case "approvals":
       return <ApprovalsPanel org={org} authorities={authorities} />;
     case "scope":
-      return <StationScopeEditor org={org} />;
+      return <OrgScopePanel org={org} />;
+    case "station-scope":
+      return <StationScopePanel org={org} />;
     case "stations":
       return <StationsPanel org={org} />;
     case "requests":

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { getSupabase } from "./supabase";
-import { fetchManagedStations } from "./managedStations";
 import type { SearchHit } from "./types";
 
 /**
@@ -138,21 +137,6 @@ async function buildIndex(): Promise<Index> {
     set.add(st.organisation_id);
   }
 
-  // Organisation-owned station overrides (migration 0004) decide presence here
-  // too, so search matches what the map shows: a removed station drops the
-  // organisation from that airport, a managed one the scrape missed adds it.
-  for (const m of await fetchManagedStations(supabase, { all: true })) {
-    if (m.removed) {
-      orgIdsByAirport.get(m.airportId)?.delete(m.organisationId);
-    } else {
-      let set = orgIdsByAirport.get(m.airportId);
-      if (!set) {
-        set = new Set();
-        orgIdsByAirport.set(m.airportId, set);
-      }
-      set.add(m.organisationId);
-    }
-  }
 
   const airports: AirportDoc[] = [];
   for (const a of airportRows) {

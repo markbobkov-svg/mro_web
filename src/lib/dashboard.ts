@@ -2,7 +2,6 @@ import "server-only";
 
 import { getAdminSupabase } from "./supabase";
 import { acceptableDomains } from "./domains";
-import { fetchManagedStations } from "./managedStations";
 
 /**
  * Reads for the organisation dashboard and the admin queue.
@@ -24,8 +23,13 @@ export interface OrgProfile {
   updatedAt: string | null;
 }
 
-export interface ManagedContact {
+/**
+ * A contact desk. `stationId` ties it to one station; a contact with none is
+ * organisation-wide and is shown for any station that has no desks of its own.
+ */
+export interface DashboardContact {
   id: string;
+  stationId: string | null;
   functionLabel: string | null;
   name: string | null;
   phone: string | null;
@@ -56,24 +60,21 @@ export interface DashboardStation {
   email: string | null;
   /** A main base for the organisation, not just a line station. */
   isBase: boolean;
-  /** This station is the organisation's own row, not (only) the scraped one. */
-  managed: boolean;
+  /** Desks for this station. Empty means the organisation-wide ones apply. */
+  contacts: DashboardContact[];
+  /** What this station is certified to work — organisation_station_scope. */
+  scope: DashboardScopeLine[];
 }
 
-/** One line of the organisation's own per-station scope (instant-publish). */
-export interface ManagedStationScopeRow {
+/**
+ * One certified-scope line. The same shape serves the organisation's own scope
+ * (`organisation_scope`) and a station's (`organisation_station_scope`); each
+ * line points at the approval it is certified under.
+ */
+export interface DashboardScopeLine {
   id: string;
-  airportId: string;
+  approvalId: string | null;
   authorityCode: string | null;
-  ratingClass: string | null;
-  scopeText: string | null;
-  locationScope: string | null;
-  sortOrder: number;
-}
-
-/** Scraped per-station scope — the "currently live" reference before takeover. */
-export interface ScrapedStationScopeRow {
-  airportId: string | null;
   ratingClass: string | null;
   scopeText: string | null;
   locationScope: string | null;
@@ -212,6 +213,7 @@ export async function getOrganisationDomains(orgId: string): Promise<string[]> {
   );
 }
 
+/** Everything the dashboard shows for one organisation. */
 export interface DashboardOrg {
   id: string;
   name: string;
@@ -225,18 +227,16 @@ export interface DashboardOrg {
     address: string | null;
   };
   profile: OrgProfile | null;
-  contacts: ManagedContact[];
-  scrapedContacts: ManagedContact[];
   approvals: DashboardApproval[];
+  /** Stations, each carrying its own desks and certified scope. */
   stations: DashboardStation[];
-  /** Organisation-maintained per-station scope (what shows on the card). */
-  stationScope: ManagedStationScopeRow[];
-  /** Scraped per-station scope, shown as the "currently live" reference. */
-  scrapedStationScope: ScrapedStationScopeRow[];
+  /** The organisation's own certified scope — organisation_scope. */
+  orgScope: DashboardScopeLine[];
+  /** Desks with no station: the fallback for stations that have none. */
+  orgContacts: DashboardContact[];
   changeRequests: ChangeRequest[];
 }
 
-/** Everything the dashboard shows for one organisation. */
 export interface AuthorityOption {
   code: string;
   name: string | null;
@@ -263,177 +263,156 @@ export async function getAuthorities(): Promise<AuthorityOption[]> {
 export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | null> {
   const supabase = getAdminSupabase();
 
+  // A claimed organisation owns its rows outright now: everything below reads
+  // the real tables the map reads, and the dashboard writes back to them. There
+  // is no override layer to merge any more (see migration 0005).
   const [
     orgRes,
     profileRes,
-    contactsRes,
-    scrapedContactsRes,
     approvalsRes,
     stationsRes,
-    crRes,
+    contactsRes,
+    orgScopeRes,
     stationScopeRes,
-    scrapedStationScopeRes,
-    managedStations,
+    crRes,
   ] = await Promise.all([
-      supabase
-        .from("organisations")
-        .select("id, name, legal_name, country_code, website, email, phone, address")
-        .eq("id", orgId)
-        .maybeSingle(),
-      supabase
-        .from("organisation_profiles")
-        .select("*")
-        .eq("organisation_id", orgId)
-        .maybeSingle(),
-      supabase
-        .from("organisation_managed_contacts")
-        .select("*")
-        .eq("organisation_id", orgId)
-        .order("sort_order"),
-      supabase
-        .from("organisation_contacts")
-        .select("id, function_label, label, name, phone, email, hours")
-        .eq("organisation_id", orgId)
-        .limit(30),
-      supabase
-        .from("organisation_approvals")
-        .select(
-          "id, approval_type, approval_reference, ratings, valid_until, source_url, authorities(code, name)",
-        )
-        .eq("organisation_id", orgId),
-      supabase
-        .from("organisation_stations")
-        .select(
-          "id, airport_id, address, phone, email, is_base, airports(name, iata_code, icao_code)",
-        )
-        .eq("organisation_id", orgId),
-      supabase
-        .from("organisation_change_requests")
-        .select("*")
-        .eq("organisation_id", orgId)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      // Organisation-owned per-station scope (instant-publish overrides) and the
-      // scraped station scope it can take over. Both are gated below so the
-      // dashboard still loads if the 0002 migration has not been applied.
-      supabase
-        .from("organisation_managed_station_scope")
-        .select(
-          "id, airport_id, authority_code, rating_class_text, scope_text, location_scope, sort_order",
-        )
-        .eq("organisation_id", orgId)
-        .order("sort_order"),
-      supabase
-        .from("organisation_station_scope")
-        .select(
-          "station_id, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope",
-        )
-        .eq("organisation_id", orgId)
-        .limit(3000),
-      // Organisation-owned station overrides (0004). Soft-fails to [], so the
-      // dashboard still loads before that migration is applied.
-      fetchManagedStations(supabase, { organisationIds: [orgId] }),
-    ]);
+    supabase
+      .from("organisations")
+      .select("id, name, legal_name, country_code, website, email, phone, address")
+      .eq("id", orgId)
+      .maybeSingle(),
+    supabase
+      .from("organisation_profiles")
+      .select("*")
+      .eq("organisation_id", orgId)
+      .maybeSingle(),
+    supabase
+      .from("organisation_approvals")
+      .select(
+        "id, approval_type, approval_reference, ratings, valid_until, source_url, authorities(code, name)",
+      )
+      .eq("organisation_id", orgId),
+    supabase
+      .from("organisation_stations")
+      .select(
+        "id, airport_id, address, phone, email, is_base, airports(name, iata_code, icao_code)",
+      )
+      .eq("organisation_id", orgId),
+    supabase
+      .from("organisation_contacts")
+      .select(
+        "id, station_id, function_label, label, name, phone, email, hours, sort_order",
+      )
+      .eq("organisation_id", orgId)
+      .limit(500),
+    supabase
+      .from("organisation_scope")
+      .select(
+        "id, organisation_approval_id, authority_text, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope, authorities(code)",
+      )
+      .eq("organisation_id", orgId)
+      .limit(3000),
+    supabase
+      .from("organisation_station_scope")
+      .select(
+        "id, station_id, organisation_approval_id, authority_text, rating_class_text, rating_class_text_en, scope_text, scope_text_en, location_scope, authorities(code)",
+      )
+      .eq("organisation_id", orgId)
+      .limit(5000),
+    supabase
+      .from("organisation_change_requests")
+      .select("*")
+      .eq("organisation_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
 
   const org = orgRes.data as Record<string, unknown> | null;
   if (!org) return null;
 
   const p = profileRes.data as Record<string, unknown> | null;
 
-  // station id -> airport id, so scraped station scope (keyed by station) can be
-  // grouped by airport alongside the managed overrides (keyed by airport).
-  const stationIdToAirport = new Map<string, string | null>();
-  for (const st of (stationsRes.data as Record<string, unknown>[]) ?? []) {
-    stationIdToAirport.set(String(st.id), (st.airport_id as string | null) ?? null);
+  const readContact = (c: Record<string, unknown>): DashboardContact => ({
+    id: String(c.id),
+    stationId: (c.station_id as string | null) ?? null,
+    functionLabel:
+      (c.function_label as string | null) ?? (c.label as string | null) ?? null,
+    name: (c.name as string | null) ?? null,
+    phone: (c.phone as string | null) ?? null,
+    email: (c.email as string | null) ?? null,
+    hours: (c.hours as string | null) ?? null,
+    sortOrder: Number(c.sort_order ?? 0),
+  });
+
+  const readScope = (s: Record<string, unknown>): DashboardScopeLine => ({
+    id: String(s.id),
+    approvalId: (s.organisation_approval_id as string | null) ?? null,
+    authorityCode:
+      (embedded(s.authorities)?.code as string | null) ??
+      (s.authority_text as string | null) ??
+      null,
+    ratingClass:
+      (s.rating_class_text_en as string | null) ??
+      (s.rating_class_text as string | null) ??
+      null,
+    scopeText:
+      (s.scope_text_en as string | null) ?? (s.scope_text as string | null) ?? null,
+    locationScope: (s.location_scope as string | null) ?? null,
+  });
+
+  const byOrder = (a: { sortOrder: number }, b: { sortOrder: number }) =>
+    a.sortOrder - b.sortOrder;
+
+  // Contacts: split into per-station desks and the organisation-wide ones.
+  const contactsByStation = new Map<string, DashboardContact[]>();
+  const orgContacts: DashboardContact[] = [];
+  for (const raw of (contactsRes.data as Record<string, unknown>[]) ?? []) {
+    const c = readContact(raw);
+    if (c.stationId) {
+      const list = contactsByStation.get(c.stationId) ?? [];
+      list.push(c);
+      contactsByStation.set(c.stationId, list);
+    } else {
+      orgContacts.push(c);
+    }
+  }
+  orgContacts.sort(byOrder);
+  for (const list of contactsByStation.values()) list.sort(byOrder);
+
+  // Per-station scope, grouped by the station it belongs to.
+  const scopeByStation = new Map<string, DashboardScopeLine[]>();
+  for (const raw of (stationScopeRes.data as Record<string, unknown>[]) ?? []) {
+    const stationId = raw.station_id ? String(raw.station_id) : null;
+    if (!stationId) continue;
+    const list = scopeByStation.get(stationId) ?? [];
+    list.push(readScope(raw));
+    scopeByStation.set(stationId, list);
   }
 
-  const stationScope: ManagedStationScopeRow[] = stationScopeRes.error
-    ? []
-    : ((stationScopeRes.data as Record<string, unknown>[]) ?? []).map((s) => ({
-        id: String(s.id),
-        airportId: String(s.airport_id),
-        authorityCode: (s.authority_code as string | null) ?? null,
-        ratingClass: (s.rating_class_text as string | null) ?? null,
-        scopeText: (s.scope_text as string | null) ?? null,
-        locationScope: (s.location_scope as string | null) ?? null,
-        sortOrder: Number(s.sort_order ?? 0),
-      }));
-
-  const scrapedStationScope: ScrapedStationScopeRow[] = scrapedStationScopeRes.error
-    ? []
-    : ((scrapedStationScopeRes.data as Record<string, unknown>[]) ?? [])
-        .map((s) => ({
-          airportId: stationIdToAirport.get(String(s.station_id)) ?? null,
-          ratingClass:
-            (s.rating_class_text_en as string | null) ??
-            (s.rating_class_text as string | null) ??
-            null,
-          scopeText:
-            (s.scope_text_en as string | null) ??
-            (s.scope_text as string | null) ??
-            null,
-          locationScope: (s.location_scope as string | null) ?? null,
-        }))
-        .filter((s) => s.scopeText);
-
-  // Merge the organisation's own station rows (0004) over the scraped ones, the
-  // same way the map does: a managed row replaces that airport's details and
-  // carries is_base, `removed` hides the station, and a managed row at an
-  // airport the scrape doesn't list adds one.
-  const managedByAirport = new Map(managedStations.map((m) => [m.airportId, m]));
-  const scrapedAirportIds = new Set<string>();
-  const stations: DashboardStation[] = [];
-  for (const st of (stationsRes.data as Record<string, unknown>[]) ?? []) {
-    const airportId = (st.airport_id as string | null) ?? null;
-    if (airportId) scrapedAirportIds.add(airportId);
-    const m = airportId ? managedByAirport.get(airportId) : undefined;
-    if (m?.removed) continue;
+  const stations: DashboardStation[] = (
+    (stationsRes.data as Record<string, unknown>[]) ?? []
+  ).map((st) => {
     const ap = embedded(st.airports);
-    stations.push({
-      id: String(st.id),
-      airportId,
+    const id = String(st.id);
+    return {
+      id,
+      airportId: (st.airport_id as string | null) ?? null,
       airportName: (ap?.name as string | null) ?? null,
       iata: (ap?.iata_code as string | null) ?? null,
       icao: (ap?.icao_code as string | null) ?? null,
-      address: m ? m.address : ((st.address as string | null) ?? null),
-      phone: m ? m.phone : ((st.phone as string | null) ?? null),
-      email: m ? m.email : ((st.email as string | null) ?? null),
-      isBase: m ? m.isBase : st.is_base === true,
-      managed: Boolean(m),
-    });
-  }
-
-  // Stations the organisation added itself — no scraped row, so look their
-  // airports up separately for the name/codes the card and list show.
-  const addedIds = managedStations
-    .filter((m) => !m.removed && !scrapedAirportIds.has(m.airportId))
-    .map((m) => m.airportId);
-  if (addedIds.length > 0) {
-    const { data: addedAirports } = await supabase
-      .from("airports")
-      .select("id, name, iata_code, icao_code")
-      .in("id", addedIds);
-    const airportById = new Map(
-      ((addedAirports as Record<string, unknown>[]) ?? []).map((a) => [String(a.id), a]),
-    );
-    for (const m of managedStations) {
-      if (m.removed || scrapedAirportIds.has(m.airportId)) continue;
-      const a = airportById.get(m.airportId);
-      stations.push({
-        // Managed-only station: key off the pair, since there is no scraped row.
-        id: `managed:${m.airportId}`,
-        airportId: m.airportId,
-        airportName: (a?.name as string | null) ?? null,
-        iata: (a?.iata_code as string | null) ?? null,
-        icao: (a?.icao_code as string | null) ?? null,
-        address: m.address,
-        phone: m.phone,
-        email: m.email,
-        isBase: m.isBase,
-        managed: true,
-      });
-    }
-  }
+      address: (st.address as string | null) ?? null,
+      phone: (st.phone as string | null) ?? null,
+      email: (st.email as string | null) ?? null,
+      isBase: st.is_base === true,
+      contacts: contactsByStation.get(id) ?? [],
+      scope: scopeByStation.get(id) ?? [],
+    };
+  });
+  stations.sort((a, b) =>
+    (a.iata ?? a.icao ?? a.airportName ?? "").localeCompare(
+      b.iata ?? b.icao ?? b.airportName ?? "",
+    ),
+  );
 
   return {
     id: String(org.id),
@@ -460,32 +439,11 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
           updatedAt: (p.updated_at as string | null) ?? null,
         }
       : null,
-    contacts: ((contactsRes.data as Record<string, unknown>[]) ?? []).map((c) => ({
-      id: String(c.id),
-      functionLabel: (c.function_label as string | null) ?? null,
-      name: (c.name as string | null) ?? null,
-      phone: (c.phone as string | null) ?? null,
-      email: (c.email as string | null) ?? null,
-      hours: (c.hours as string | null) ?? null,
-      sortOrder: Number(c.sort_order ?? 0),
-    })),
-    scrapedContacts: ((scrapedContactsRes.data as Record<string, unknown>[]) ?? []).map(
-      (c) => ({
-        id: String(c.id),
-        functionLabel:
-          (c.function_label as string | null) ?? (c.label as string | null) ?? null,
-        name: (c.name as string | null) ?? null,
-        phone: (c.phone as string | null) ?? null,
-        email: (c.email as string | null) ?? null,
-        hours: (c.hours as string | null) ?? null,
-        sortOrder: 0,
-      }),
-    ),
     approvals: ((approvalsRes.data as Record<string, unknown>[]) ?? []).map((a) => {
       const auth = embedded(a.authorities);
       return {
         id: String(a.id),
-        authorityCode: String(auth?.code ?? "Other"),
+        authorityCode: String(auth?.code ?? "—"),
         authorityName: (auth?.name as string | null) ?? null,
         approvalType: String(a.approval_type ?? ""),
         reference: (a.approval_reference as string | null) ?? null,
@@ -495,8 +453,8 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
       };
     }),
     stations,
-    stationScope,
-    scrapedStationScope,
+    orgScope: ((orgScopeRes.data as Record<string, unknown>[]) ?? []).map(readScope),
+    orgContacts,
     changeRequests: ((crRes.data as Record<string, unknown>[]) ?? []).map(readChangeRequest),
   };
 }

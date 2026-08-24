@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState } from "react-dom";
 
 import {
@@ -82,9 +82,9 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
                               </span>
                             ) : null}
                           </p>
-                          {s.address || s.phone || s.email ? (
+                          {s.address || s.phone || s.email || s.hours ? (
                             <p className="mt-0.5 truncate text-xs text-white/35">
-                              {[s.address, s.phone, s.email]
+                              {[s.address, s.phone, s.hours, s.email]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </p>
@@ -360,6 +360,17 @@ function ContactForm({
 }) {
   const [state, action] = useFormState(saveContactAction, EMPTY);
 
+  // Close once the save lands. The saved desk then appears in the list above and
+  // the "+ Add a contact" button comes back — without this the form stayed open
+  // still holding the values just saved, so adding a second desk re-submitted
+  // the first one and tripped the duplicate guard.
+  const saved = Boolean(state.notice);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    if (saved) done.current();
+  }, [saved]);
+
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="organisationId" value={org.id} />
@@ -386,7 +397,7 @@ function ContactForm({
         <Field label="E-mail">
           <Input name="email" type="email" defaultValue={contact?.email ?? ""} />
         </Field>
-        <Field label="Hours" hint="optional">
+        <Field label="Phone hours" hint="when this desk is reachable">
           <Input
             name="hours"
             defaultValue={contact?.hours ?? ""}
@@ -484,6 +495,13 @@ function StationForm({
         ) : null}
         <Field label="Phone">
           <Input name="phone" defaultValue={station?.phone ?? ""} />
+        </Field>
+        <Field label="Phone hours" hint="when that number is answered">
+          <Input
+            name="hours"
+            defaultValue={station?.hours ?? ""}
+            placeholder="24/7 or Mon–Fri 06:00–22:00"
+          />
         </Field>
         <Field label="E-mail">
           <Input name="email" type="email" defaultValue={station?.email ?? ""} />

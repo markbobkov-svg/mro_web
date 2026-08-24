@@ -58,6 +58,8 @@ export interface DashboardStation {
   address: string | null;
   phone: string | null;
   email: string | null;
+  /** When this station's own phone is answered. */
+  hours: string | null;
   /** A main base for the organisation, not just a line station. */
   isBase: boolean;
   /** Desks for this station. Empty means the organisation-wide ones apply. */
@@ -292,11 +294,12 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
         "id, approval_type, approval_reference, ratings, valid_until, source_url, authorities(code, name)",
       )
       .eq("organisation_id", orgId),
+    // `*` rather than a column list: `hours` arrives with migration 0006, and
+    // naming a column that does not exist yet fails the whole read — which would
+    // empty the Stations tab until the migration is applied.
     supabase
       .from("organisation_stations")
-      .select(
-        "id, airport_id, address, phone, email, is_base, airports(name, iata_code, icao_code)",
-      )
+      .select("*, airports(name, iata_code, icao_code)")
       .eq("organisation_id", orgId),
     supabase
       .from("organisation_contacts")
@@ -403,6 +406,7 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
       address: (st.address as string | null) ?? null,
       phone: (st.phone as string | null) ?? null,
       email: (st.email as string | null) ?? null,
+      hours: (st.hours as string | null) ?? null,
       isBase: st.is_base === true,
       contacts: contactsByStation.get(id) ?? [],
       scope: scopeByStation.get(id) ?? [],

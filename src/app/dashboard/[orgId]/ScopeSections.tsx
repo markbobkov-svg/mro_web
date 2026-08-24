@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState } from "react-dom";
 
 import {
@@ -281,6 +281,16 @@ function OrgScopeForm({
 }) {
   const [state, action] = useFormState(saveOrgScopeAction, EMPTY);
 
+  // Close once the save lands, so the new line shows in the list and the next
+  // one can be added — otherwise the form stays open holding what was just
+  // saved and re-submitting it trips the duplicate guard.
+  const saved = Boolean(state.notice);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    if (saved) done.current();
+  }, [saved]);
+
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="organisationId" value={org.id} />
@@ -465,6 +475,16 @@ function StationScopeForm({
   onDone: () => void;
 }) {
   const [state, action] = useFormState(saveStationScopeAction, EMPTY);
+
+  // Close once the save lands, so the new line shows in the list and the next
+  // one can be added — otherwise the form stays open holding what was just
+  // saved and re-submitting it trips the duplicate guard.
+  const saved = Boolean(state.notice);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    if (saved) done.current();
+  }, [saved]);
 
   return (
     <form action={action} className="space-y-3">

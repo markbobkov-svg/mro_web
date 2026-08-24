@@ -221,6 +221,13 @@ function ApprovalChangeForm({
 // -------------------------------------------------------------- stations ---
 
 export function StationsPanel({ org }: { org: DashboardOrg }) {
+  // Which station's inline form is open, and whether it's an edit or a removal.
+  const [open, setOpen] = useState<{
+    id: string;
+    mode: "update" | "remove";
+  } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
   return (
     <div className="space-y-3 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {org.stations.length === 0 ? (
@@ -228,98 +235,156 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
           You don&rsquo;t appear at any airport yet.
         </p>
       ) : (
-        <ul className="divide-y divide-white/10">
-          {org.stations.map((s) => (
-            <li key={s.id} className="py-2.5">
-              <p className="text-sm text-white/90">
-                {s.iata || s.icao ? (
-                  <span className="mr-2 font-mono text-xs text-accent">
-                    {s.iata ?? s.icao}
-                  </span>
+        <ul className="space-y-2">
+          {org.stations.map((s) => {
+            const editing = open?.id === s.id && open.mode === "update";
+            const removing = open?.id === s.id && open.mode === "remove";
+            return (
+              <li
+                key={s.id}
+                className="rounded-[2px] border border-white/10 bg-black/30 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-white/90">
+                      {s.iata || s.icao ? (
+                        <span className="mr-2 font-mono text-xs text-accent">
+                          {s.iata ?? s.icao}
+                        </span>
+                      ) : null}
+                      {s.airportName ?? "Unknown airport"}
+                    </p>
+                    {s.address || s.phone || s.email ? (
+                      <p className="mt-0.5 truncate text-xs text-white/35">
+                        {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpen(editing ? null : { id: s.id, mode: "update" })
+                      }
+                      className="text-xs text-white/45 transition hover:text-white"
+                    >
+                      {editing ? "Cancel" : "Edit station"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpen(removing ? null : { id: s.id, mode: "remove" })
+                      }
+                      className="text-xs text-white/45 transition hover:text-red-300"
+                    >
+                      {removing ? "Cancel" : "Remove station"}
+                    </button>
+                  </div>
+                </div>
+
+                {editing || removing ? (
+                  <div className="mt-3 border-l-2 border-white/10 pl-4">
+                    <StationForm
+                      org={org}
+                      mode={open!.mode}
+                      station={s}
+                      onDone={() => setOpen(null)}
+                    />
+                  </div>
                 ) : null}
-                {s.airportName ?? "Unknown airport"}
-              </p>
-              {s.address || s.phone || s.email ? (
-                <p className="mt-0.5 truncate text-xs text-white/35">
-                  {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
-                </p>
-              ) : null}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      <AddToggle label="+ Propose a station change">
-        <StationChangeForm org={org} />
-      </AddToggle>
+      {/* Add station — its own button below the cards. */}
+      {addOpen ? (
+        <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide2 text-white/45">
+              Add a station
+            </span>
+            <button
+              type="button"
+              onClick={() => setAddOpen(false)}
+              className="text-xs text-white/35 transition hover:text-white/70"
+            >
+              Close
+            </button>
+          </div>
+          <StationForm
+            org={org}
+            mode="add"
+            station={null}
+            onDone={() => setAddOpen(false)}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="w-full rounded-[2px] border border-dashed border-white/10 px-4 py-2.5
+            text-sm text-white/45 transition hover:border-white/25 hover:text-white"
+        >
+          + Add station
+        </button>
+      )}
     </div>
   );
 }
 
-function StationChangeForm({ org }: { org: DashboardOrg }) {
+function StationForm({
+  org,
+  mode,
+  station,
+  onDone,
+}: {
+  org: DashboardOrg;
+  mode: "add" | "update" | "remove";
+  station: DashboardStation | null;
+  onDone: () => void;
+}) {
   const [state, action] = useFormState(proposeChangeAction, EMPTY);
-  const [mode, setMode] = useState<"add" | "update" | "remove">("add");
-  const [targetId, setTargetId] = useState("");
 
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="organisationId" value={org.id} />
       <input type="hidden" name="target" value="station" />
       <input type="hidden" name="action" value={mode} />
-      {mode !== "add" ? (
-        <input type="hidden" name="targetId" value={targetId} />
-      ) : null}
+      {station ? <input type="hidden" name="targetId" value={station.id} /> : null}
 
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
       {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
 
-      <div className="flex flex-wrap gap-2">
-        <ModeButton active={mode === "add"} onClick={() => setMode("add")}>
-          New station
-        </ModeButton>
-        <ModeButton active={mode === "update"} onClick={() => setMode("update")}>
-          Correct one
-        </ModeButton>
-        <ModeButton active={mode === "remove"} onClick={() => setMode("remove")}>
-          Remove one
-        </ModeButton>
-      </div>
-
-      {mode !== "add" ? (
-        <Field label="Which station">
-          <select
-            value={targetId}
-            onChange={(e) => setTargetId(e.target.value)}
-            required
-            className="w-full rounded-[2px] border border-white/10 bg-black/40 px-3 py-2 text-sm
-              text-white/90 outline-none focus:border-accent"
-          >
-            <option value="">Pick a station…</option>
-            {org.stations.map((s) => (
-              <option key={s.id} value={s.id}>
-                {[s.iata ?? s.icao, s.airportName].filter(Boolean).join(" — ")}
-              </option>
-            ))}
-          </select>
-        </Field>
-      ) : null}
-
-      {mode !== "remove" ? (
+      {mode === "remove" ? (
+        <p className="text-sm text-white/60">
+          Remove{" "}
+          <span className="text-white/90">
+            {station?.airportName ?? "this station"}
+          </span>{" "}
+          from your listing? Tell the reviewer why below.
+        </p>
+      ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Airport code" hint="IATA or ICAO">
-            <Input name="airportCode" placeholder="FRA / EDDF" />
+            <Input
+              name="airportCode"
+              defaultValue={station?.iata ?? station?.icao ?? ""}
+              placeholder="FRA / EDDF"
+            />
           </Field>
           <Field label="Phone">
-            <Input name="phone" />
+            <Input name="phone" defaultValue={station?.phone ?? ""} />
           </Field>
           <Field label="E-mail">
-            <Input name="email" type="email" />
+            <Input name="email" type="email" defaultValue={station?.email ?? ""} />
           </Field>
           <Field label="Address">
-            <Input name="address" />
+            <Input name="address" defaultValue={station?.address ?? ""} />
           </Field>
         </div>
-      ) : null}
+      )}
 
       <Field
         label="Note for the reviewer"
@@ -328,7 +393,16 @@ function StationChangeForm({ org }: { org: DashboardOrg }) {
         <Textarea name="note" rows={2} />
       </Field>
 
-      <SubmitButton pendingLabel="Sending…">Send for review</SubmitButton>
+      <div className="flex items-center gap-2">
+        <SubmitButton pendingLabel="Sending…">Send for review</SubmitButton>
+        <button
+          type="button"
+          onClick={onDone}
+          className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

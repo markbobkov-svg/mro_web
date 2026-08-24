@@ -31,19 +31,45 @@ export function ApprovalsPanel({
   org: DashboardOrg;
   authorities: AuthorityOption[];
 }) {
-  const [open, setOpen] = useState<string | null>(null);
+  // Which approval's inline form is open, and whether it's an edit or a removal
+  // — same shape as StationsPanel, so both tabs behave identically.
+  const [open, setOpen] = useState<{
+    id: string;
+    mode: "update" | "remove";
+  } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   return (
     <div className="space-y-3 rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
       {org.approvals.length === 0 ? (
         <p className="text-sm text-white/35">
-          No approvals on file. If you hold one, propose it below.
+          No approvals on file. If you hold one, add it below.
         </p>
       ) : (
         <ul className="divide-y divide-white/10">
-          {org.approvals.map((a) => (
-            <li key={a.id} className="py-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+          {org.approvals.map((a) => {
+            const editing = open?.id === a.id && open.mode === "update";
+            const removing = open?.id === a.id && open.mode === "remove";
+
+            if (editing || removing) {
+              return (
+                <li key={a.id} className="py-4">
+                  <ApprovalForm
+                    org={org}
+                    mode={open!.mode}
+                    approval={a}
+                    authorities={authorities}
+                    onDone={() => setOpen(null)}
+                  />
+                </li>
+              );
+            }
+
+            return (
+              <li
+                key={a.id}
+                className="flex items-start justify-between gap-4 py-3"
+              >
                 <div className="min-w-0">
                   <p className="text-sm text-white/90">
                     <span className="mr-2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-white/45">
@@ -67,82 +93,105 @@ export function ApprovalsPanel({
                     </p>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(open === a.id ? null : a.id)}
-                  className="shrink-0 text-xs text-white/45 transition hover:text-white"
-                >
-                  {open === a.id ? "Cancel" : "Propose a change"}
-                </button>
-              </div>
-
-              {open === a.id ? (
-                <div className="mt-3 border-l-2 border-white/10 pl-4">
-                  <ApprovalChangeForm
-                    org={org}
-                    approval={a}
-                    authorities={authorities}
-                    onDone={() => setOpen(null)}
-                  />
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: a.id, mode: "update" })}
+                    className="text-xs text-white/45 transition hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: a.id, mode: "remove" })}
+                    className="text-xs text-white/45 transition hover:text-red-300"
+                  >
+                    Remove
+                  </button>
                 </div>
-              ) : null}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      <AddToggle label="+ Propose a missing approval">
-        <ApprovalChangeForm
-          org={org}
-          approval={null}
-          authorities={authorities}
-          onDone={() => {}}
-        />
-      </AddToggle>
+      {/* Add approval — its own button below the list, boxed like the Scope
+          tab's "New scope line" so a multi-field form has room to breathe. */}
+      {addOpen ? (
+        <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide2 text-white/45">
+              Add an approval
+            </span>
+            <button
+              type="button"
+              onClick={() => setAddOpen(false)}
+              className="text-xs text-white/35 transition hover:text-white/70"
+            >
+              Close
+            </button>
+          </div>
+          <ApprovalForm
+            org={org}
+            mode="add"
+            approval={null}
+            authorities={authorities}
+            onDone={() => setAddOpen(false)}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="rounded-[2px] border border-dashed border-white/10 px-4 py-2 text-sm
+            text-white/45 transition hover:border-white/25 hover:text-white"
+        >
+          + Add an approval
+        </button>
+      )}
     </div>
   );
 }
 
-function ApprovalChangeForm({
+function ApprovalForm({
   org,
+  mode,
   approval,
   authorities,
   onDone,
 }: {
   org: DashboardOrg;
+  mode: "add" | "update" | "remove";
   approval: DashboardApproval | null;
   authorities: AuthorityOption[];
   onDone: () => void;
 }) {
   const [state, action] = useFormState(proposeChangeAction, EMPTY);
-  const [mode, setMode] = useState<"update" | "remove">("update");
-  const isNew = approval === null;
 
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="organisationId" value={org.id} />
       <input type="hidden" name="target" value="approval" />
-      <input type="hidden" name="action" value={isNew ? "add" : mode} />
+      <input type="hidden" name="action" value={mode} />
       {approval ? <input type="hidden" name="targetId" value={approval.id} /> : null}
       {/* Every approval on this map is a Part-145 approval — assign it by
           default rather than asking, so there's no type field to fill in. */}
-      {isNew ? <input type="hidden" name="approvalType" value="Part-145" /> : null}
+      {mode === "add" ? <input type="hidden" name="approvalType" value="Part-145" /> : null}
 
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
       {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
 
-      {!isNew ? (
-        <div className="flex gap-2">
-          <ModeButton active={mode === "update"} onClick={() => setMode("update")}>
-            Correct it
-          </ModeButton>
-          <ModeButton active={mode === "remove"} onClick={() => setMode("remove")}>
-            It shouldn&rsquo;t be here
-          </ModeButton>
-        </div>
-      ) : null}
-
-      {mode === "update" || isNew ? (
+      {mode === "remove" ? (
+        <p className="text-sm text-white/60">
+          Remove{" "}
+          <span className="text-white/90">
+            {[approval?.authorityCode, approval?.approvalType]
+              .filter(Boolean)
+              .join(" ") || "this approval"}
+          </span>{" "}
+          from your listing? Tell the reviewer why below.
+        </p>
+      ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Authority" hint="from the authorities register">
             <select
@@ -193,7 +242,7 @@ function ApprovalChangeForm({
             />
           </Field>
         </div>
-      ) : null}
+      )}
 
       <Field
         label="Note for the reviewer"
@@ -204,15 +253,13 @@ function ApprovalChangeForm({
 
       <div className="flex items-center gap-2">
         <SubmitButton pendingLabel="Sending…">Send for review</SubmitButton>
-        {!isNew ? (
-          <button
-            type="button"
-            onClick={onDone}
-            className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
-          >
-            Cancel
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={onDone}
+          className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
+        >
+          Cancel
+        </button>
       </div>
     </form>
   );
@@ -235,70 +282,68 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
           You don&rsquo;t appear at any airport yet.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-white/10">
           {org.stations.map((s) => {
             const editing = open?.id === s.id && open.mode === "update";
             const removing = open?.id === s.id && open.mode === "remove";
+
+            if (editing || removing) {
+              return (
+                <li key={s.id} className="py-4">
+                  <StationForm
+                    org={org}
+                    mode={open!.mode}
+                    station={s}
+                    onDone={() => setOpen(null)}
+                  />
+                </li>
+              );
+            }
+
             return (
               <li
                 key={s.id}
-                className="rounded-[2px] border border-white/10 bg-black/30 p-4"
+                className="flex items-start justify-between gap-4 py-3"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-white/90">
-                      {s.iata || s.icao ? (
-                        <span className="mr-2 font-mono text-xs text-accent">
-                          {s.iata ?? s.icao}
-                        </span>
-                      ) : null}
-                      {s.airportName ?? "Unknown airport"}
-                    </p>
-                    {s.address || s.phone || s.email ? (
-                      <p className="mt-0.5 truncate text-xs text-white/35">
-                        {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
-                      </p>
+                <div className="min-w-0">
+                  <p className="text-sm text-white/90">
+                    {s.iata || s.icao ? (
+                      <span className="mr-2 font-mono text-xs text-accent">
+                        {s.iata ?? s.icao}
+                      </span>
                     ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpen(editing ? null : { id: s.id, mode: "update" })
-                      }
-                      className="text-xs text-white/45 transition hover:text-white"
-                    >
-                      {editing ? "Cancel" : "Edit station"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpen(removing ? null : { id: s.id, mode: "remove" })
-                      }
-                      className="text-xs text-white/45 transition hover:text-red-300"
-                    >
-                      {removing ? "Cancel" : "Remove station"}
-                    </button>
-                  </div>
+                    {s.airportName ?? "Unknown airport"}
+                  </p>
+                  {s.address || s.phone || s.email ? (
+                    <p className="mt-0.5 truncate text-xs text-white/35">
+                      {[s.address, s.phone, s.email].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
-
-                {editing || removing ? (
-                  <div className="mt-3 border-l-2 border-white/10 pl-4">
-                    <StationForm
-                      org={org}
-                      mode={open!.mode}
-                      station={s}
-                      onDone={() => setOpen(null)}
-                    />
-                  </div>
-                ) : null}
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: s.id, mode: "update" })}
+                    className="text-xs text-white/45 transition hover:text-white"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ id: s.id, mode: "remove" })}
+                    className="text-xs text-white/45 transition hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             );
           })}
         </ul>
       )}
 
-      {/* Add station — its own button below the cards. */}
+      {/* Add station — its own button below the list, boxed like the Scope
+          tab's "New scope line" so a multi-field form has room to breathe. */}
       {addOpen ? (
         <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -324,10 +369,10 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
         <button
           type="button"
           onClick={() => setAddOpen(true)}
-          className="w-full rounded-[2px] border border-dashed border-white/10 px-4 py-2.5
-            text-sm text-white/45 transition hover:border-white/25 hover:text-white"
+          className="rounded-[2px] border border-dashed border-white/10 px-4 py-2 text-sm
+            text-white/45 transition hover:border-white/25 hover:text-white"
         >
-          + Add station
+          + Add a station
         </button>
       )}
     </div>
@@ -407,69 +452,3 @@ function StationForm({
   );
 }
 
-// ---------------------------------------------------------------- shared ---
-
-function ModeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-[2px] border px-3 py-1.5 text-xs transition ${
-        active
-          ? "border-accent bg-accent/10 text-accent-bright"
-          : "border-white/10 text-white/45 hover:text-white/85"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function AddToggle({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-[2px] border border-dashed border-white/10 px-4 py-2 text-sm
-          text-white/45 transition hover:border-white/25 hover:text-white"
-      >
-        {label}
-      </button>
-    );
-  }
-
-  return (
-    <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide2 text-white/45">
-          {label.replace(/^\+\s*/, "")}
-        </span>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-xs text-white/35 transition hover:text-white/70"
-        >
-          Close
-        </button>
-      </div>
-      {children}
-    </div>
-  );
-}

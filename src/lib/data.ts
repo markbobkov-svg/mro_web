@@ -2,6 +2,7 @@ import "server-only";
 
 import { getSupabase } from "./supabase";
 import { resolveCoordinates } from "./airportCoords";
+import { fetchManagedStations, stationKey } from "./managedStations";
 import type {
   AirportMarker,
   AirportDetail,
@@ -74,6 +75,27 @@ export async function getAirportMarkers(orgScope?: string[] | null): Promise<{
     }
     if (data.length < PAGE) break;
   }
+
+  // Organisation-owned station overrides (migration 0004) decide presence too:
+  // a removed station drops the organisation from that airport, a managed one
+  // the scrape missed adds it. Soft-fails to no overrides before the migration.
+  for (const m of await fetchManagedStations(supabase, {
+    organisationIds: scope,
+    all: true,
+  })) {
+    if (m.removed) {
+      airportOrgs.get(m.airportId)?.delete(m.organisationId);
+    } else {
+      let set = airportOrgs.get(m.airportId);
+      if (!set) {
+        set = new Set();
+        airportOrgs.set(m.airportId, set);
+      }
+      set.add(m.organisationId);
+    }
+  }
+  // An airport whose last organisation was removed is no longer a marker.
+  for (const [id, orgs] of airportOrgs) if (orgs.size === 0) airportOrgs.delete(id);
 
   const airportIds = Array.from(airportOrgs.keys());
   if (airportIds.length === 0) return { markers: [], organisationCount: 0 };
@@ -213,19 +235,48 @@ export async function getAirportDetail(
     .eq("airport_id", airportId);
   if (scope) stationsQuery = stationsQuery.in("organisation_id", scope);
 
-  const [{ data: airport, error: aErr }, { data: stations, error: sErr }] =
-    await Promise.all([
+  const [
+    { data: airport, error: aErr },
+    { data: stations, error: sErr },
+    managedStations,
+  ] = await Promise.all([
       supabase
         .from("airports")
         .select("id, iata_code, icao_code, name, city, country_code")
         .eq("id", airportId)
         .maybeSingle(),
       stationsQuery,
+      fetchManagedStations(supabase, { airportId, organisationIds: scope }),
     ]);
   if (aErr) throw new Error(`getAirportDetail(airport): ${aErr.message}`);
   if (sErr) throw new Error(`getAirportDetail(stations): ${sErr.message}`);
 
-  const stationRows = (stations as any[]) ?? [];
+  // Merge the organisation-owned station overrides (migration 0004) over the
+  // scraped rows: a managed row replaces that station's details, `removed`
+  // hides it, and a managed row with no scraped station adds one. Everything
+  // below is keyed off these rows, so doing it here covers the whole card.
+  const managedHere = new Map(managedStations.map((m) => [m.organisationId, m]));
+  const stationRows = ((stations as any[]) ?? [])
+    .filter((s) => !managedHere.get(s.organisation_id)?.removed)
+    .map((s) => {
+      const m = managedHere.get(s.organisation_id);
+      return m ? { ...s, address: m.address, phone: m.phone, email: m.email } : s;
+    });
+  const scrapedOrgIds = new Set(((stations as any[]) ?? []).map((s) => s.organisation_id));
+  for (const m of managedStations) {
+    if (m.removed || scrapedOrgIds.has(m.organisationId)) continue;
+    stationRows.push({
+      // No scraped station to point at — a synthetic id keeps this row distinct
+      // and simply matches no scraped per-station scope, which is correct.
+      id: `managed:${stationKey(m.organisationId, m.airportId)}`,
+      organisation_id: m.organisationId,
+      address: m.address,
+      phone: m.phone,
+      email: m.email,
+      country_code: null,
+    });
+  }
+
   const airportInfo = {
     id: airportId,
     iata: (airport as any)?.iata_code ?? null,
@@ -240,7 +291,11 @@ export async function getAirportDetail(
   }
 
   const orgIds = uniq(stationRows.map((s) => s.organisation_id).filter(Boolean));
-  const stationIds = stationRows.map((s) => s.id);
+  // Only real scraped ids go to the DB — a managed-added station's synthetic id
+  // is not a uuid, and there is no scraped per-station scope to look up for it.
+  const stationIds = stationRows
+    .map((s) => String(s.id))
+    .filter((id) => !id.startsWith("managed:"));
 
   const [
     orgsRes,

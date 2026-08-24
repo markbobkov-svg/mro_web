@@ -71,8 +71,8 @@ const TABS: TabDef[] = [
     key: "stations",
     label: "Stations",
     title: "Stations",
-    note: "The airports where you appear on the map.",
-    publish: "review",
+    note: "The airports where you appear on the map. Mark the ones that are a main base — changes go live immediately.",
+    publish: "instant",
   },
   {
     key: "requests",

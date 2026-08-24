@@ -597,6 +597,129 @@ export async function revertStationScopeAction(
   return { notice: "Reverted to the scraped scope for this station." };
 }
 
+// ------------------------------------------------- stations (instant) ------
+// Stations publish instantly: an organisation knows which airports it works at,
+// and which of them is a base, better than a reviewer does — the same call
+// already made for per-station scope. Nothing is written to the scraper-owned
+// `organisation_stations`; edits go to `organisation_managed_stations` and are
+// merged over the scraped rows at read time. See migration 0004.
+
+/** A checkbox is absent from the form data entirely when unticked. */
+function bool(data: FormData, key: string): boolean {
+  const v = data.get(key);
+  return v === "on" || v === "true" || v === "1";
+}
+
+/** Look an airport up by IATA or ICAO code. */
+async function airportIdByCode(
+  supabase: ReturnType<typeof getAdminSupabase>,
+  code: string,
+): Promise<string | null> {
+  const c = code.trim().toUpperCase();
+  if (!c) return null;
+  const { data } = await supabase
+    .from("airports")
+    .select("id")
+    .or(`iata_code.eq.${c},icao_code.eq.${c}`)
+    .limit(1)
+    .maybeSingle();
+  return data ? String((data as { id: string }).id) : null;
+}
+
+/** "…table not found" from PostgREST means 0004 hasn't been applied yet. */
+function missingStationsTable(err: unknown): boolean {
+  const m = err && typeof err === "object" && "message" in err
+    ? String((err as { message: unknown }).message)
+    : "";
+  return /organisation_managed_stations/i.test(m) &&
+    /(does not exist|not find|schema cache)/i.test(m);
+}
+
+const MIGRATION_HINT =
+  "Station editing needs migration 0004 (organisation_managed_stations) — apply it in the Supabase SQL editor first.";
+
+export async function saveStationAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  // An existing station is edited by airport (the pair the override keys on);
+  // a new one is named by its IATA/ICAO code.
+  const knownAirportId = str(data, "airportId");
+  const airportCode = str(data, "airportCode");
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+
+    let airportId = knownAirportId;
+    if (!airportId) {
+      if (!airportCode) return { error: "Enter the airport's IATA or ICAO code." };
+      const found = await airportIdByCode(supabase, airportCode);
+      if (!found) {
+        return { error: `No airport matches “${airportCode}”. Check the code.` };
+      }
+      airportId = found;
+    }
+
+    const { error } = await supabase.from("organisation_managed_stations").upsert(
+      {
+        organisation_id: organisationId,
+        airport_id: airportId,
+        address: nullable(data, "address"),
+        phone: nullable(data, "phone"),
+        email: nullable(data, "email"),
+        is_base: bool(data, "isBase"),
+        removed: false,
+      },
+      { onConflict: "organisation_id,airport_id" },
+    );
+    if (error) throw error;
+  } catch (err) {
+    if (missingStationsTable(err)) return { error: MIGRATION_HINT };
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+  return { notice: knownAirportId ? "Station updated." : "Station added." };
+}
+
+export async function deleteStationAction(
+  _prev: ActionState,
+  data: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const organisationId = str(data, "organisationId");
+  const airportId = str(data, "airportId");
+
+  if (!airportId) return { error: "Pick a station first." };
+
+  try {
+    await requireMember(user, organisationId);
+    const supabase = getAdminSupabase();
+    // A tombstone, not a delete: the scraped row stays and would come back on
+    // the next run, so removal has to be recorded rather than applied.
+    const { error } = await supabase.from("organisation_managed_stations").upsert(
+      {
+        organisation_id: organisationId,
+        airport_id: airportId,
+        removed: true,
+      },
+      { onConflict: "organisation_id,airport_id" },
+    );
+    if (error) throw error;
+  } catch (err) {
+    if (missingStationsTable(err)) return { error: MIGRATION_HINT };
+    return { error: toMessage(err) };
+  }
+
+  revalidatePath(`/dashboard/${organisationId}`);
+  revalidatePath("/");
+  return { notice: "Station removed from your listing." };
+}
+
 /** PostgREST returns an embedded relation as an object or a one-element array. */
 function embeddedCode(value: unknown): string | null {
   if (!value) return null;

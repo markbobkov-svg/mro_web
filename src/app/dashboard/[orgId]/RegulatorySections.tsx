@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { useFormState } from "react-dom";
 
-import { proposeChangeAction, type ActionState } from "../actions";
+import {
+  deleteStationAction,
+  proposeChangeAction,
+  saveStationAction,
+  type ActionState,
+} from "../actions";
 import type {
   AuthorityOption,
   DashboardApproval,
@@ -297,12 +302,19 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
                   key={s.id}
                   className="rounded-[2px] border border-white/10 bg-black/30 p-4"
                 >
-                  <StationForm
-                    org={org}
-                    mode={open!.mode}
-                    station={s}
-                    onDone={() => setOpen(null)}
-                  />
+                  {editing ? (
+                    <StationForm
+                      org={org}
+                      station={s}
+                      onDone={() => setOpen(null)}
+                    />
+                  ) : (
+                    <RemoveStationForm
+                      org={org}
+                      station={s}
+                      onDone={() => setOpen(null)}
+                    />
+                  )}
                 </li>
               );
             }
@@ -321,6 +333,15 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
                       </span>
                     ) : null}
                     {s.airportName ?? "Unknown airport"}
+                    {s.isBase ? (
+                      <span
+                        className="ml-2 rounded-[2px] border border-accent/40 bg-accent/10
+                          px-1.5 py-0.5 text-[10px] uppercase tracking-wide2 text-accent-bright"
+                        title="A main base for this organisation"
+                      >
+                        Base
+                      </span>
+                    ) : null}
                   </p>
                   {s.address || s.phone || s.email ? (
                     <p className="mt-0.5 truncate text-xs text-white/35">
@@ -366,12 +387,7 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
               Close
             </button>
           </div>
-          <StationForm
-            org={org}
-            mode="add"
-            station={null}
-            onDone={() => setAddOpen(false)}
-          />
+          <StationForm org={org} station={null} onDone={() => setAddOpen(false)} />
         </div>
       ) : (
         <button
@@ -387,67 +403,128 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
   );
 }
 
+/**
+ * Add or correct a station. Publishes instantly — it writes the organisation's
+ * own override row, never the scraped table, so a re-scrape can't undo it.
+ *
+ * An existing station is keyed by its airport (the pair the override keys on),
+ * so the airport itself isn't editable here: moving to another airport is
+ * removing this one and adding that one.
+ */
 function StationForm({
   org,
-  mode,
   station,
   onDone,
 }: {
   org: DashboardOrg;
-  mode: "add" | "update" | "remove";
   station: DashboardStation | null;
   onDone: () => void;
 }) {
-  const [state, action] = useFormState(proposeChangeAction, EMPTY);
+  const [state, action] = useFormState(saveStationAction, EMPTY);
+  const isNew = station === null;
 
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="organisationId" value={org.id} />
-      <input type="hidden" name="target" value="station" />
-      <input type="hidden" name="action" value={mode} />
-      {station ? <input type="hidden" name="targetId" value={station.id} /> : null}
+      {station?.airportId ? (
+        <input type="hidden" name="airportId" value={station.airportId} />
+      ) : null}
 
       {state.error ? <Alert kind="error">{state.error}</Alert> : null}
       {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
 
-      {mode === "remove" ? (
-        <p className="text-sm text-white/60">
-          Remove{" "}
-          <span className="text-white/90">
-            {station?.airportName ?? "this station"}
-          </span>{" "}
-          from your listing? Tell the reviewer why below.
+      {!isNew ? (
+        <p className="text-sm text-white/90">
+          {station.iata || station.icao ? (
+            <span className="mr-2 font-mono text-xs text-accent">
+              {station.iata ?? station.icao}
+            </span>
+          ) : null}
+          {station.airportName ?? "Unknown airport"}
         </p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Airport code" hint="IATA or ICAO">
-            <Input
-              name="airportCode"
-              defaultValue={station?.iata ?? station?.icao ?? ""}
-              placeholder="FRA / EDDF"
-            />
-          </Field>
-          <Field label="Phone">
-            <Input name="phone" defaultValue={station?.phone ?? ""} />
-          </Field>
-          <Field label="E-mail">
-            <Input name="email" type="email" defaultValue={station?.email ?? ""} />
-          </Field>
-          <Field label="Address">
-            <Input name="address" defaultValue={station?.address ?? ""} />
-          </Field>
-        </div>
-      )}
+      ) : null}
 
-      <Field
-        label="Note for the reviewer"
-        hint={mode === "remove" ? "required" : "optional"}
-      >
-        <Textarea name="note" rows={2} />
-      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {isNew ? (
+          <Field label="Airport code" hint="IATA or ICAO">
+            <Input name="airportCode" placeholder="FRA / EDDF" />
+          </Field>
+        ) : null}
+        <Field label="Phone">
+          <Input name="phone" defaultValue={station?.phone ?? ""} />
+        </Field>
+        <Field label="E-mail">
+          <Input name="email" type="email" defaultValue={station?.email ?? ""} />
+        </Field>
+        <Field label="Address">
+          <Input name="address" defaultValue={station?.address ?? ""} />
+        </Field>
+      </div>
+
+      <label className="flex items-center gap-2.5 text-sm text-white/70">
+        <input
+          type="checkbox"
+          name="isBase"
+          defaultChecked={station?.isBase ?? false}
+          className="h-4 w-4 shrink-0 accent-accent"
+        />
+        This station is a main base
+        <span className="text-xs text-white/35">
+          (base maintenance, not just line)
+        </span>
+      </label>
 
       <div className="flex items-center gap-2">
-        <SubmitButton pendingLabel="Sending…">Send for review</SubmitButton>
+        <SubmitButton pendingLabel="Saving…">
+          {isNew ? "Add station" : "Save station"}
+        </SubmitButton>
+        <button
+          type="button"
+          onClick={onDone}
+          className="rounded-[2px] px-3 py-2 text-sm text-white/35 transition hover:text-white/70"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Removing a station takes the organisation off that airport on the public map
+ * straight away, so it asks first — unlike the one-click Remove on contacts and
+ * scope lines, which are cheap to retype.
+ */
+function RemoveStationForm({
+  org,
+  station,
+  onDone,
+}: {
+  org: DashboardOrg;
+  station: DashboardStation;
+  onDone: () => void;
+}) {
+  const [state, action] = useFormState(deleteStationAction, EMPTY);
+
+  return (
+    <form action={action} className="space-y-3">
+      <input type="hidden" name="organisationId" value={org.id} />
+      <input type="hidden" name="airportId" value={station.airportId ?? ""} />
+
+      {state.error ? <Alert kind="error">{state.error}</Alert> : null}
+      {state.notice ? <Alert kind="notice">{state.notice}</Alert> : null}
+
+      <p className="text-sm text-white/60">
+        Remove{" "}
+        <span className="text-white/90">
+          {station.airportName ?? "this station"}
+        </span>{" "}
+        from your listing? You disappear from that airport on the map straight
+        away. You can add it back later.
+      </p>
+
+      <div className="flex items-center gap-2">
+        <SubmitButton pendingLabel="Removing…">Remove station</SubmitButton>
         <button
           type="button"
           onClick={onDone}

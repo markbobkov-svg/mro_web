@@ -24,8 +24,10 @@ export interface OrgProfile {
 }
 
 /**
- * A contact desk. `stationId` ties it to one station; a contact with none is
- * organisation-wide and is shown for any station that has no desks of its own.
+ * A contact desk. `stationId` ties it to the one station it answers for — every
+ * desk the dashboard writes has one. A station with no desks of its own shows
+ * the organisation's profile details (phone / e-mail / website) on its card
+ * instead.
  */
 export interface DashboardContact {
   id: string;
@@ -60,7 +62,7 @@ export interface DashboardStation {
   email: string | null;
   /** A main base for the organisation, not just a line station. */
   isBase: boolean;
-  /** Desks for this station. Empty means the organisation-wide ones apply. */
+  /** Desks for this station. Empty means the profile's details are shown. */
   contacts: DashboardContact[];
   /** What this station is certified to work — organisation_station_scope. */
   scope: DashboardScopeLine[];
@@ -232,8 +234,6 @@ export interface DashboardOrg {
   stations: DashboardStation[];
   /** The organisation's own certified scope — organisation_scope. */
   orgScope: DashboardScopeLine[];
-  /** Desks with no station: the fallback for stations that have none. */
-  orgContacts: DashboardContact[];
   changeRequests: ChangeRequest[];
 }
 
@@ -363,20 +363,18 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
   const byOrder = (a: { sortOrder: number }, b: { sortOrder: number }) =>
     a.sortOrder - b.sortOrder;
 
-  // Contacts: split into per-station desks and the organisation-wide ones.
+  // Contacts, grouped under the station each one answers for. A row with no
+  // station is scraped organisation-wide data the dashboard no longer maintains
+  // — migration 0006 attaches a claimed organisation's to one of its stations,
+  // and until then it is simply not shown here (the map still falls back to it).
   const contactsByStation = new Map<string, DashboardContact[]>();
-  const orgContacts: DashboardContact[] = [];
   for (const raw of (contactsRes.data as Record<string, unknown>[]) ?? []) {
     const c = readContact(raw);
-    if (c.stationId) {
-      const list = contactsByStation.get(c.stationId) ?? [];
-      list.push(c);
-      contactsByStation.set(c.stationId, list);
-    } else {
-      orgContacts.push(c);
-    }
+    if (!c.stationId) continue;
+    const list = contactsByStation.get(c.stationId) ?? [];
+    list.push(c);
+    contactsByStation.set(c.stationId, list);
   }
-  orgContacts.sort(byOrder);
   for (const list of contactsByStation.values()) list.sort(byOrder);
 
   // Per-station scope, grouped by the station it belongs to.
@@ -454,7 +452,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
     }),
     stations,
     orgScope: ((orgScopeRes.data as Record<string, unknown>[]) ?? []).map(readScope),
-    orgContacts,
     changeRequests: ((crRes.data as Record<string, unknown>[]) ?? []).map(readChangeRequest),
   };
 }

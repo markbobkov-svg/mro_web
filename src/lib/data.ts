@@ -269,7 +269,7 @@ export async function getAirportDetail(
       supabase
         .from("organisation_contacts")
         .select(
-          "organisation_id, function_label, label, name, phone, email, hours, station_iata, station_icao",
+          "organisation_id, station_id, function_label, label, name, phone, email, hours, sort_order, station_iata, station_icao",
         )
         .in("organisation_id", orgIds),
       supabase.from("authorities").select("id, code, name"),
@@ -421,30 +421,77 @@ export async function getAirportDetail(
     am.set(auth, list);
   }
 
+  // --- desks: a contact answers for one station ---
+  //
+  // A desk is tied to its station either by the real link
+  // (organisation_contacts.station_id — what the dashboard writes) or, on older
+  // scraped rows, by the station code it was found under. Either way it only
+  // shows at its own airport: a desk belonging to another of the organisation's
+  // stations is dropped here rather than shown on every card.
+  //
+  // A contact with no station at all is scraped organisation-wide data. It is
+  // the fallback for a station with no desks of its own — and when there is none
+  // of those either, the card falls back to the organisation's own details
+  // (profile phone / e-mail / website, see OrgCard).
   const iata = airportInfo.iata?.toUpperCase();
   const icao = airportInfo.icao?.toUpperCase();
-  const contactsByOrg = new Map<string, Contact[]>();
+  const stationIdSet = new Set(stationIds.map((id) => String(id)));
+  type Desk = { contact: Contact; sortOrder: number };
+  const desksByStation = new Map<string, Desk[]>(); // station id -> its own desks
+  const codedByOrg = new Map<string, Desk[]>(); // org id -> desks matched by station code
+  const orgWideByOrg = new Map<string, Desk[]>(); // org id -> desks with no station
+  const push = (map: Map<string, Desk[]>, key: string, desk: Desk) => {
+    const list = map.get(key) ?? [];
+    list.push(desk);
+    map.set(key, list);
+  };
+
   for (const c of (contactsRes.data as any[]) ?? []) {
-    // keep contacts tied to this airport, or org-wide (no station code)
-    const cIata = (c.station_iata || "").toUpperCase();
-    const cIcao = (c.station_icao || "").toUpperCase();
-    const stationSpecific = cIata || cIcao;
-    const matchesAirport = (iata && cIata === iata) || (icao && cIcao === icao);
-    if (stationSpecific && !matchesAirport) continue;
     // `function_label` is what both the scraper and the dashboard write;
     // `label` is the older column and is null on every dashboard-entered desk,
     // so reading it alone left those contacts on the map with no caption.
     const label = c.function_label ?? c.label ?? null;
     if (!c.phone && !c.email && !c.name && !label) continue;
-    const list = contactsByOrg.get(c.organisation_id) ?? [];
-    list.push({
-      label,
-      name: c.name ?? null,
-      phone: c.phone ?? null,
-      email: c.email ?? null,
-      hours: c.hours ?? null,
-    });
-    contactsByOrg.set(c.organisation_id, list);
+    const desk: Desk = {
+      contact: {
+        label,
+        name: c.name ?? null,
+        phone: c.phone ?? null,
+        email: c.email ?? null,
+        hours: c.hours ?? null,
+      },
+      sortOrder: Number(c.sort_order ?? 0),
+    };
+
+    if (c.station_id) {
+      // Another station's desk — not this airport's business.
+      if (!stationIdSet.has(String(c.station_id))) continue;
+      push(desksByStation, String(c.station_id), desk);
+      continue;
+    }
+
+    const cIata = (c.station_iata || "").toUpperCase();
+    const cIcao = (c.station_icao || "").toUpperCase();
+    if (cIata || cIcao) {
+      const matchesAirport = (iata && cIata === iata) || (icao && cIcao === icao);
+      if (!matchesAirport) continue;
+      push(codedByOrg, c.organisation_id, desk);
+      continue;
+    }
+
+    push(orgWideByOrg, c.organisation_id, desk);
+  }
+
+  function desksForStation(stationId: string, organisationId: string): Contact[] {
+    const own = [
+      ...(desksByStation.get(stationId) ?? []),
+      ...(codedByOrg.get(organisationId) ?? []),
+    ];
+    const list = own.length > 0 ? own : orgWideByOrg.get(organisationId) ?? [];
+    return [...list]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((d) => d.contact)
+      .slice(0, 4);
   }
 
   // Per-station line/base summary (the org header badge), from the same
@@ -518,7 +565,7 @@ export async function getAirportDetail(
       email: profile?.email ?? s.email ?? org.email ?? null,
       website: profile?.website ?? org.website ?? null,
       authorities: buildAuthorities(s.organisation_id),
-      contacts: (contactsByOrg.get(s.organisation_id) ?? []).slice(0, 4),
+      contacts: desksForStation(String(s.id), s.organisation_id),
       claimed: claimedOrgs.has(s.organisation_id),
       tagline: profile?.tagline ?? null,
       description: profile?.description ?? null,

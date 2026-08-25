@@ -126,8 +126,9 @@ Migrations, all applied by hand in the Supabase SQL editor:
 `0002_managed_station_scope.sql` and `0004_managed_stations.sql` (the old
 override layer), then **`0005_org_owned_data.sql`**, which folds that layer back
 into the real tables, drops it, and hands claimed organisations ownership of
-their own rows. 0002 and 0004 are kept only so the history reads straight —
-0005 supersedes both.
+their own rows, and finally `0006_station_desks.sql`, a one-off tidy-up that
+attaches the last station-less desks to a station. 0002 and 0004 are kept only
+so the history reads straight — 0005 supersedes both.
 
 - **Accounts** are Supabase Auth, e-mail + password, confirmation required.
   All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
@@ -174,9 +175,25 @@ enforces that for every role except `service_role`.
 > trigger blocks it with no scraper code change; otherwise it must skip rows
 > where `claimed_at is not null`.
 
-`organisation_contacts.station_id` ties a desk to one station. A contact with no
-station is organisation-wide and is the fallback shown for any station that has
-no desks of its own.
+`organisation_contacts.station_id` ties a desk to the one station it answers
+for, and a station takes **as many desks as it needs** — each with its own
+`hours`. There are no organisation-wide desks in the dashboard any more: a
+station with none of its own shows the **profile** contact details (phone /
+e-mail / website, the `profile ?? station ?? org` scalar in the card header)
+instead. Migration `0006_station_desks.sql` rehomes the station-less rows a
+claimed organisation still had from the old model — pick the station the desk
+names, else a main base, else the first by code.
+
+Station-less contacts remain for **unclaimed** listings: they are scraped data,
+and `getAirportDetail` still shows them as the fallback for a station with no
+desks of its own. What it no longer does is show a *station's* desk on every one
+of that organisation's cards — a desk is dropped unless its `station_id` (or, on
+older scraped rows, its `station_iata` / `station_icao`) is this airport's.
+
+`organisation_contacts.contact_key` is generated and UNIQUE **per organisation,
+station not included**, so two byte-identical desks at two stations still clash;
+the save reports it as a duplicate. Changing that would mean redefining the
+generated column, which `data_scraper` upserts on — so it is left alone.
 
 ### Security boundary — read before touching the dashboard
 

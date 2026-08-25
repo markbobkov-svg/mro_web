@@ -22,10 +22,11 @@ const EMPTY: ActionState = {};
 /**
  * Stations, and the desks operators call at each one.
  *
- * There is no separate Contacts tab any more: a desk belongs to the station it
- * answers for. A station with no desks of its own falls back to the
- * organisation-wide ones, which are maintained in their own block at the foot
- * of the tab. Everything here publishes instantly, straight to the real tables.
+ * There is no separate Contacts tab any more, and no organisation-wide desk
+ * block either: a desk belongs to the station it answers for, and a station can
+ * hold as many as it needs (each with its own opening hours). A station with no
+ * desks of its own shows the contact details from the Profile tab instead.
+ * Everything here publishes instantly, straight to the real tables.
  */
 
 export function StationsPanel({ org }: { org: DashboardOrg }) {
@@ -144,8 +145,6 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
           </button>
         )}
       </div>
-
-      <OrgWideContacts org={org} />
     </div>
   );
 }
@@ -161,7 +160,7 @@ function StationContacts({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const usingFallback = station.contacts.length === 0 && org.orgContacts.length > 0;
+  const count = station.contacts.length;
 
   return (
     <div className="mt-4 border-t border-white/10 pt-3">
@@ -169,7 +168,7 @@ function StationContacts({
         Contacts at this station
       </p>
 
-      {station.contacts.length > 0 ? (
+      {count > 0 ? (
         <ul className="space-y-1.5">
           {station.contacts.map((c) =>
             editingId === c.id ? (
@@ -193,9 +192,9 @@ function StationContacts({
         </ul>
       ) : (
         <p className="text-xs text-white/35">
-          {usingFallback
-            ? "None of its own — the organisation-wide desks below are shown for this station."
-            : "No desks yet."}
+          None yet — the contact details from your Profile tab are shown for this
+          station. Add a desk here to give operators a number that answers at
+          this airport, with its own hours.
         </p>
       )}
 
@@ -214,89 +213,7 @@ function StationContacts({
           onClick={() => setAdding(true)}
           className="mt-2 text-xs text-white/45 transition hover:text-white"
         >
-          + Add a contact here
-        </button>
-      )}
-    </div>
-  );
-}
-
-/** Desks with no station — the fallback for stations that have none. */
-function OrgWideContacts({ org }: { org: DashboardOrg }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-medium text-white">Organisation-wide desks</h3>
-        <p className="mt-1 text-xs text-white/35">
-          Shown for any station that has no contacts of its own.
-        </p>
-      </div>
-
-      {org.orgContacts.length === 0 ? (
-        <p className="text-sm text-white/35">
-          None yet. Add the desks operators should call when a station has no
-          number of its own.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {org.orgContacts.map((c) =>
-            editingId === c.id ? (
-              <li
-                key={c.id}
-                className="rounded-[2px] border border-white/10 bg-black/30 p-4"
-              >
-                <ContactForm
-                  org={org}
-                  stationId=""
-                  contact={c}
-                  onDone={() => setEditingId(null)}
-                />
-              </li>
-            ) : (
-              <ContactRow
-                key={c.id}
-                org={org}
-                contact={c}
-                boxed
-                onEdit={() => setEditingId(c.id)}
-              />
-            ),
-          )}
-        </ul>
-      )}
-
-      {adding ? (
-        <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide2 text-white/45">
-              Add a contact
-            </span>
-            <button
-              type="button"
-              onClick={() => setAdding(false)}
-              className="text-xs text-white/35 transition hover:text-white/70"
-            >
-              Close
-            </button>
-          </div>
-          <ContactForm
-            org={org}
-            stationId=""
-            contact={null}
-            onDone={() => setAdding(false)}
-          />
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="rounded-[2px] border border-dashed border-white/10 px-4 py-2 text-sm
-            text-white/45 transition hover:border-white/25 hover:text-white"
-        >
-          + Add a contact
+          {count > 0 ? "+ Add another contact here" : "+ Add a contact here"}
         </button>
       )}
     </div>
@@ -306,22 +223,14 @@ function OrgWideContacts({ org }: { org: DashboardOrg }) {
 function ContactRow({
   org,
   contact,
-  boxed,
   onEdit,
 }: {
   org: DashboardOrg;
   contact: DashboardContact;
-  boxed?: boolean;
   onEdit: () => void;
 }) {
   return (
-    <li
-      className={`flex items-start justify-between gap-4 ${
-        boxed
-          ? "rounded-[2px] border border-white/10 bg-black/30 p-4"
-          : "rounded-[2px] bg-black/20 px-3 py-2"
-      }`}
-    >
+    <li className="flex items-start justify-between gap-4 rounded-[2px] bg-black/20 px-3 py-2">
       <div className="min-w-0">
         <p className="text-sm text-white/90">
           {contact.functionLabel ?? contact.name ?? "Contact"}
@@ -353,7 +262,7 @@ function ContactForm({
   onDone,
 }: {
   org: DashboardOrg;
-  /** "" makes it an organisation-wide desk. */
+  /** The station this desk answers for — every desk belongs to one. */
   stationId: string;
   contact: DashboardContact | null;
   onDone: () => void;

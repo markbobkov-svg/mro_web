@@ -284,7 +284,9 @@ export async function saveContactAction(
   const user = await requireUser();
   const organisationId = str(data, "organisationId");
   const contactId = str(data, "contactId");
-  // Empty = an organisation-wide desk, shown for stations that have none.
+  // Every desk answers for one station: a station can hold as many as it needs,
+  // and a station with none shows the organisation's profile details instead.
+  // There are no organisation-wide desks any more (see migration 0006).
   const stationId = str(data, "stationId");
 
   const row = {
@@ -298,6 +300,7 @@ export async function saveContactAction(
     sort_order: Number(str(data, "sortOrder") || 0),
   };
 
+  if (!stationId) return { error: "Pick the station this contact answers for." };
   if (!row.function_label && !row.name && !row.phone && !row.email) {
     return { error: "Give the desk a name, a phone or an e-mail." };
   }
@@ -305,7 +308,7 @@ export async function saveContactAction(
   try {
     await requireMember(user, organisationId);
     const supabase = getAdminSupabase();
-    if (stationId) await assertOwnStation(supabase, organisationId, stationId);
+    await assertOwnStation(supabase, organisationId, stationId);
 
     if (contactId) {
       const { error } = await supabase
@@ -323,10 +326,14 @@ export async function saveContactAction(
       if (error) throw error;
     }
   } catch (err) {
-    // contact_key is generated from the desk's own fields and is UNIQUE, so an
-    // exact duplicate is a clash rather than a real failure — say so plainly.
+    // contact_key is generated from the desk's own fields and is UNIQUE across
+    // the whole organisation — the station is not part of it — so an identical
+    // desk, even at another station, is a clash rather than a real failure.
     if (isDuplicate(err)) {
-      return { error: "You already have a contact with exactly these details." };
+      return {
+        error:
+          "You already have a contact with exactly these details — give this one something that tells them apart, such as the desk name or the airport.",
+      };
     }
     return { error: toMessage(err) };
   }

@@ -82,9 +82,9 @@ export interface OrgAtAirport {
   tagline: string | null;
   description: string | null;
   logoUrl: string | null;
-  /** Aircraft-on-ground desk — the number an operator calls in a hurry. */
-  aogPhone: string | null;
-  aogEmail: string | null;
+  // No AOG fields: an aircraft-on-ground desk is a `contacts` entry named "AOG"
+  // like any other desk, with its own hours. The old
+  // organisation_profiles.aog_phone / aog_email pair is no longer read.
 }
 
 /** One row of the search dropdown, with the reason it matched. */

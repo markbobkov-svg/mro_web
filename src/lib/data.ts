@@ -269,7 +269,9 @@ export async function getAirportDetail(
       supabase
         .from("organisation_contacts")
         .select(
-          "organisation_id, station_id, function_label, label, name, phone, email, hours, sort_order, station_iata, station_icao",
+          // No station_iata / station_icao: a desk's airport comes from
+          // station_id alone now.
+          "organisation_id, station_id, function_label, label, name, phone, email, hours, sort_order",
         )
         .in("organisation_id", orgIds),
       supabase.from("authorities").select("id, code, name"),
@@ -279,7 +281,9 @@ export async function getAirportDetail(
       supabase
         .from("organisation_profiles")
         .select(
-          "organisation_id, tagline, description, logo_url, website, email, phone, address, aog_phone, aog_email",
+          // No email / phone / aog_*: desks carry every way of reaching a
+          // person, and those columns are no longer read or editable.
+          "organisation_id, tagline, description, logo_url, website, address",
         )
         .in("organisation_id", orgIds),
       supabase
@@ -421,24 +425,19 @@ export async function getAirportDetail(
     am.set(auth, list);
   }
 
-  // --- desks: a contact answers for one station ---
+  // --- desks: two levels, and only two ---
   //
-  // A desk is tied to its station either by the real link
-  // (organisation_contacts.station_id — what the dashboard writes) or, on older
-  // scraped rows, by the station code it was found under. Either way it only
-  // shows at its own airport: a desk belonging to another of the organisation's
-  // stations is dropped here rather than shown on every card.
+  // 1. organisation_contacts.station_id = this station -> the station's own
+  //    desks. A desk belonging to another of the organisation's stations is
+  //    dropped rather than shown on every card.
+  // 2. station_id IS NULL -> organisation-wide, maintained on the Profile tab.
+  //    Shown only when the station has no desks of its own.
   //
-  // A contact with no station at all is scraped organisation-wide data. It is
-  // the fallback for a station with no desks of its own — and when there is none
-  // of those either, the card falls back to the organisation's own details
-  // (profile phone / e-mail / website, see OrgCard).
-  const iata = airportInfo.iata?.toUpperCase();
-  const icao = airportInfo.icao?.toUpperCase();
+  // When there are none of either, OrgCard falls back to the header scalars
+  // (station phone/e-mail, else the scraped organisation ones).
   const stationIdSet = new Set(stationIds.map((id) => String(id)));
   type Desk = { contact: Contact; sortOrder: number };
   const desksByStation = new Map<string, Desk[]>(); // station id -> its own desks
-  const codedByOrg = new Map<string, Desk[]>(); // org id -> desks matched by station code
   const orgWideByOrg = new Map<string, Desk[]>(); // org id -> desks with no station
   const push = (map: Map<string, Desk[]>, key: string, desk: Desk) => {
     const list = map.get(key) ?? [];
@@ -463,6 +462,11 @@ export async function getAirportDetail(
       sortOrder: Number(c.sort_order ?? 0),
     };
 
+    // `station_id` is the only thing that pins a desk to an airport. The
+    // scraped `station_iata` / `station_icao` columns are deliberately ignored:
+    // matching on them made a desk's airport depend on free text, and a row
+    // carrying a code but no station_id belongs to no station as far as the
+    // model is concerned. Everything without a station_id is organisation-wide.
     if (c.station_id) {
       // Another station's desk — not this airport's business.
       if (!stationIdSet.has(String(c.station_id))) continue;
@@ -470,23 +474,11 @@ export async function getAirportDetail(
       continue;
     }
 
-    const cIata = (c.station_iata || "").toUpperCase();
-    const cIcao = (c.station_icao || "").toUpperCase();
-    if (cIata || cIcao) {
-      const matchesAirport = (iata && cIata === iata) || (icao && cIcao === icao);
-      if (!matchesAirport) continue;
-      push(codedByOrg, c.organisation_id, desk);
-      continue;
-    }
-
     push(orgWideByOrg, c.organisation_id, desk);
   }
 
   function desksForStation(stationId: string, organisationId: string): Contact[] {
-    const own = [
-      ...(desksByStation.get(stationId) ?? []),
-      ...(codedByOrg.get(organisationId) ?? []),
-    ];
+    const own = desksByStation.get(stationId) ?? [];
     const list = own.length > 0 ? own : orgWideByOrg.get(organisationId) ?? [];
     return [...list]
       .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -551,8 +543,15 @@ export async function getAirportDetail(
     const org = orgById.get(s.organisation_id) ?? {};
     const profile = profileByOrg.get(s.organisation_id) ?? null;
 
-    // Precedence, most specific first: what the organisation typed, then the
-    // station's own details, then the organisation-level scraped values.
+    // Desks outrank the header scalars, so `organisation_profiles.phone` and
+    // `.email` are not in this chain: they are the old single-contact model,
+    // no longer editable in the dashboard, and a stale value there would
+    // otherwise sit above every desk. Address and website stay — the Profile
+    // tab still maintains those, and neither is a way to reach a person.
+    //
+    // The scalars only ever surface when an organisation has no desks at all
+    // (see OrgCard), which now means: station's own desks, else the
+    // organisation-wide ones, else this.
     return {
       stationId: s.id,
       organisationId: s.organisation_id,
@@ -561,8 +560,8 @@ export async function getAirportDetail(
       locationScope: deriveLocationScope(stationLocScope.get(s.id) ?? []),
       countryCode: s.country_code ?? org.country_code ?? null,
       address: profile?.address ?? s.address ?? org.address ?? null,
-      phone: profile?.phone ?? s.phone ?? org.phone ?? null,
-      email: profile?.email ?? s.email ?? org.email ?? null,
+      phone: s.phone ?? org.phone ?? null,
+      email: s.email ?? org.email ?? null,
       website: profile?.website ?? org.website ?? null,
       authorities: buildAuthorities(s.organisation_id),
       contacts: desksForStation(String(s.id), s.organisation_id),
@@ -570,8 +569,6 @@ export async function getAirportDetail(
       tagline: profile?.tagline ?? null,
       description: profile?.description ?? null,
       logoUrl: profile?.logo_url ?? null,
-      aogPhone: profile?.aog_phone ?? null,
-      aogEmail: profile?.aog_email ?? null,
     };
   });
 

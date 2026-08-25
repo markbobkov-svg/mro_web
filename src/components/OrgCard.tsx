@@ -113,32 +113,9 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         )}
       </div>
 
-      {/* AOG desk — the thing an operator with a grounded aircraft looks for */}
-      {(org.aogPhone || org.aogEmail) && (
-        <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2">
-          <p className="text-[9px] uppercase tracking-wide2 text-amber-300/80">
-            AOG desk
-          </p>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-            {org.aogPhone && (
-              <a
-                href={`tel:${org.aogPhone.replace(/\s+/g, "")}`}
-                className="text-xs text-amber-100 transition hover:text-white"
-              >
-                {org.aogPhone}
-              </a>
-            )}
-            {org.aogEmail && (
-              <a
-                href={`mailto:${org.aogEmail}`}
-                className="truncate text-xs text-amber-100/80 transition hover:text-white"
-              >
-                {org.aogEmail}
-              </a>
-            )}
-          </div>
-        </div>
-      )}
+      {/* An AOG desk is a desk now: one named "AOG" in the contacts below,
+          with its own hours, rather than a pair of profile columns nothing in
+          the dashboard can edit. */}
 
       {authorities.length === 0 && (
         <p className="mt-3 text-xs text-white/30">No approval details.</p>

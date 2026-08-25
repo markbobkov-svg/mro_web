@@ -175,32 +175,39 @@ enforces that for every role except `service_role`.
 > trigger blocks it with no scraper code change; otherwise it must skip rows
 > where `claimed_at is not null`.
 
-`organisation_contacts.station_id` ties a desk to the one station it answers
-for, and a station takes **as many desks as it needs** — each with its own
-`hours`. **Desks live at two levels, and both are edited with the same
-component** (`ContactsBlock`): the **Stations** tab maintains a station's own,
-the **Profile** tab the organisation-wide ones (`station_id is null`). A station
-with no desks of its own falls back to the organisation-wide ones, and when
-there are none of those either, to the **profile** scalars (phone / e-mail /
-website, the `profile ?? station ?? org` card header).
+**Desks live at exactly two levels**, and `organisation_contacts.station_id` is
+the only thing that separates them. Both are edited with the same component
+(`ContactsBlock`): the **Stations** tab maintains a station's own, the
+**Profile** tab the organisation-wide ones (`station_id is null`). A station
+takes as many desks as it needs, each with its own `hours`.
+
+What the card shows at one airport (`desksForStation` in `data.ts`):
+
+1. desks whose `station_id` is **this** station — a desk pinned to another of
+   the organisation's stations is dropped, not shown on every card;
+2. else the organisation-wide ones (`station_id is null`);
+3. else nothing, and `OrgCard` prints the header scalars instead.
+
+**`station_iata` / `station_icao` are ignored.** Matching a desk to an airport
+by those scraped codes is gone: a row carrying a code but no `station_id`
+belongs to no station, so it counts as organisation-wide and shows as the
+fallback at every one of that organisation's airports. Pinning to an airport
+means setting `station_id`.
 
 `saveContactAction` will only create a station-less desk when the form posts
 `orgWide=1` — an explicit ask, so a bug in the station form can never quietly
 detach a desk from its airport.
 
-**The Profile tab holds only website and address.** Every way of reaching a
-person is a desk now, so the phone / e-mail / AOG fields were taken off that
-form. `saveProfileAction` therefore does **not** write
-`organisation_profiles.phone / email / aog_phone / aog_email` — writing
-`nullable(data, …)` for a field the form no longer posts would wipe those
-columns on the next save. Values already in them survive and still win the card
-header (`profile ?? station ?? org` in `getAirportDetail`) and still draw the
-card's AOG block, but nothing in the dashboard can edit them any more — clear
-them by hand if a listing shows a stale number.
-
-`getAirportDetail` does *not* show a *station's* desk on every one of that
-organisation's cards — a desk is dropped unless its `station_id` (or, on older
-scraped rows, its `station_iata` / `station_icao`) is this airport's.
+**The Profile tab holds only website and address, and desks outrank the header
+scalars.** Every way of reaching a person is a desk now, so the phone / e-mail /
+AOG fields came off that form — and `organisation_profiles.phone`, `.email`,
+`.aog_phone` and `.aog_email` are no longer *read* either: the header chain is
+`station ?? org` for phone and e-mail, and the card's AOG block is gone (an AOG
+desk is a desk named "AOG"). `profile.website` and `profile.address` stay in the
+chain, since the Profile tab still maintains them. `saveProfileAction` does not
+write the dropped columns rather than nulling them — writing `nullable(data, …)`
+for a field the form no longer posts would wipe them on the next save — so the
+old values sit in the database, unread and harmless.
 
 `organisation_contacts.contact_key` is generated and UNIQUE **per organisation,
 station not included**, so two byte-identical desks at two stations still clash;

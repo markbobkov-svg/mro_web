@@ -15,7 +15,6 @@ const EMPTY: ActionState = {};
 interface OrgResult {
   id: string;
   name: string;
-  legalName: string | null;
   countryCode: string | null;
   website: string | null;
   claimed: boolean;
@@ -240,9 +239,6 @@ function NewOrgRequest() {
 
       <Field label="Organisation name">
         <Input name="name" required placeholder="Example Aviation Services" />
-      </Field>
-      <Field label="Legal name" hint="optional">
-        <Input name="legalName" placeholder="Example Aviation Services GmbH" />
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">

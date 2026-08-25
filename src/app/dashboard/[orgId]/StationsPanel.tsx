@@ -78,11 +78,9 @@ export function StationsPanel({ org }: { org: DashboardOrg }) {
                               </span>
                             ) : null}
                           </p>
-                          {s.address || s.phone || s.email ? (
+                          {s.address ? (
                             <p className="mt-0.5 truncate text-xs text-white/35">
-                              {[s.address, s.phone, s.email]
-                                .filter(Boolean)
-                                .join(" · ")}
+                              {s.address}
                             </p>
                           ) : null}
                         </div>
@@ -203,12 +201,9 @@ function StationForm({
             <Input name="airportCode" placeholder="FRA / EDDF" />
           </Field>
         ) : null}
-        <Field label="Phone" hint="for opening hours, add a contact below">
-          <Input name="phone" defaultValue={station?.phone ?? ""} />
-        </Field>
-        <Field label="E-mail">
-          <Input name="email" type="email" defaultValue={station?.email ?? ""} />
-        </Field>
+        {/* No phone or e-mail: 0008 dropped those columns. A number that
+            answers at this airport is a desk in the contacts below, where it
+            can carry hours and there can be more than one. */}
         <Field label="Address">
           <Input name="address" defaultValue={station?.address ?? ""} />
         </Field>

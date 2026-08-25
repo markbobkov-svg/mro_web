@@ -210,7 +210,7 @@ export async function getAirportDetail(
   // signed-in MRO only ever sees its own card at the airport.
   let stationsQuery = supabase
     .from("organisation_stations")
-    .select("id, address, country_code, phone, email, organisation_id")
+    .select("id, address, country_code, organisation_id")
     .eq("airport_id", airportId);
   if (scope) stationsQuery = stationsQuery.in("organisation_id", scope);
 
@@ -528,20 +528,16 @@ export async function getAirportDetail(
     // The station's value still wins for address, since a station has an
     // address of its own and the organisation's is the head office.
     //
-    // `phone` and `email` are the single-value fallback the card prints at its
-    // foot when an organisation has no desks at all — no station desks and no
-    // organisation-wide ones. In practice that is an unclaimed listing, where
-    // nobody has been along to enter desks.
+    // No phone or e-mail here at all: 0008 dropped both pairs of columns and
+    // turned what was in them into desks. Every way of reaching a person is a
+    // row in organisation_contacts now, so `contacts` is the whole story.
     return {
       stationId: s.id,
       organisationId: s.organisation_id,
       name: org.name ?? "Unknown organisation",
-      legalName: org.legal_name ?? null,
       locationScope: deriveLocationScope(stationLocScope.get(s.id) ?? []),
       countryCode: s.country_code ?? org.country_code ?? null,
       address: s.address ?? org.address ?? null,
-      phone: s.phone ?? org.phone ?? null,
-      email: s.email ?? org.email ?? null,
       website: org.website ?? null,
       authorities: buildAuthorities(s.organisation_id),
       contacts: desksForStation(String(s.id), s.organisation_id),

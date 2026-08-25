@@ -47,7 +47,6 @@ export function ClaimReview({
 
       {isNew ? (
         <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-          <Row label="Legal name" value={claim.proposedLegalName} />
           <Row label="Country" value={claim.proposedCountryCode} />
           <Row label="Website" value={claim.proposedWebsite} />
           <Row label="Approval ref" value={claim.proposedApprovalRef} />

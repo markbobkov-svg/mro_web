@@ -25,10 +25,10 @@ export interface OrgProfile {
 }
 
 /**
- * A contact desk. `stationId` ties it to the one station it answers for — every
- * desk the dashboard writes has one. A station with no desks of its own shows
- * the organisation's profile details (phone / e-mail / website) on its card
- * instead.
+ * A contact desk — the only place a phone or an e-mail lives (0008 dropped the
+ * columns on `organisations` and `organisation_stations`). `stationId` ties one
+ * to the station it answers for; without it the desk is organisation-wide and
+ * stands in wherever a station has none of its own.
  */
 export interface DashboardContact {
   id: string;
@@ -59,11 +59,9 @@ export interface DashboardStation {
   iata: string | null;
   icao: string | null;
   address: string | null;
-  phone: string | null;
-  email: string | null;
   /** A main base for the organisation, not just a line station. */
   isBase: boolean;
-  /** Desks for this station. Empty means the profile's details are shown. */
+  /** Desks for this station. Empty means the organisation-wide ones stand in. */
   contacts: DashboardContact[];
   /** What this station is certified to work — organisation_station_scope. */
   scope: DashboardScopeLine[];
@@ -108,7 +106,6 @@ export interface ClaimRow {
   organisationId: string | null;
   organisationName: string | null;
   proposedName: string | null;
-  proposedLegalName: string | null;
   proposedCountryCode: string | null;
   proposedWebsite: string | null;
   proposedAddress: string | null;
@@ -124,7 +121,6 @@ export interface ClaimRow {
 export interface OrgSummary {
   id: string;
   name: string;
-  legalName: string | null;
   countryCode: string | null;
   website: string | null;
   /** Already spoken for — the UI greys these out. */
@@ -147,8 +143,8 @@ export async function searchOrganisations(
 
   const { data, error } = await supabase
     .from("organisations")
-    .select("id, name, legal_name, country_code, website, email")
-    .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
+    .select("id, name, country_code, website")
+    .ilike("name", `%${escaped}%`)
     .order("name")
     .limit(limit);
   if (error) throw new Error(`searchOrganisations: ${error.message}`);
@@ -160,13 +156,10 @@ export async function searchOrganisations(
   return rows.map((r) => ({
     id: String(r.id),
     name: String(r.name ?? "Unnamed"),
-    legalName: (r.legal_name as string | null) ?? null,
     countryCode: (r.country_code as string | null) ?? null,
     website: (r.website as string | null) ?? null,
     claimed: claimed.has(String(r.id)),
-    domains: acceptableDomains(r.website as string | null, [
-      r.email as string | null,
-    ]),
+    domains: acceptableDomains(r.website as string | null, []),
   }));
 }
 
@@ -193,7 +186,7 @@ export async function getOrganisationDomains(orgId: string): Promise<string[]> {
   const [{ data: org }, { data: contacts }] = await Promise.all([
     supabase
       .from("organisations")
-      .select("website, email")
+      .select("website")
       .eq("id", orgId)
       .maybeSingle(),
     supabase
@@ -207,12 +200,11 @@ export async function getOrganisationDomains(orgId: string): Promise<string[]> {
   const contactEmails = ((contacts as Record<string, unknown>[]) ?? []).map(
     (c) => c.email as string | null,
   );
+  // organisations.email is gone (0008). Nothing is lost: the migration turned
+  // it into an organisation-wide desk, so it reaches this list via contacts.
   return acceptableDomains(
     (org as Record<string, unknown> | null)?.website as string | null,
-    [
-      (org as Record<string, unknown> | null)?.email as string | null,
-      ...contactEmails,
-    ],
+    contactEmails,
   );
 }
 
@@ -220,7 +212,6 @@ export async function getOrganisationDomains(orgId: string): Promise<string[]> {
 export interface DashboardOrg {
   id: string;
   name: string;
-  legalName: string | null;
   countryCode: string | null;
   /**
    * The editable profile. No longer nullable and no separate `scraped` block:
@@ -296,7 +287,7 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
     supabase
       .from("organisation_stations")
       .select(
-        "id, airport_id, address, phone, email, is_base, airports(name, iata_code, icao_code)",
+        "id, airport_id, address, is_base, airports(name, iata_code, icao_code)",
       )
       .eq("organisation_id", orgId),
     supabase
@@ -404,8 +395,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
       iata: (ap?.iata_code as string | null) ?? null,
       icao: (ap?.icao_code as string | null) ?? null,
       address: (st.address as string | null) ?? null,
-      phone: (st.phone as string | null) ?? null,
-      email: (st.email as string | null) ?? null,
       isBase: st.is_base === true,
       contacts: contactsByStation.get(id) ?? [],
       scope: scopeByStation.get(id) ?? [],
@@ -420,7 +409,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
   return {
     id: String(org.id),
     name: String(org.name ?? "Unnamed"),
-    legalName: (org.legal_name as string | null) ?? null,
     countryCode: (org.country_code as string | null) ?? null,
     profile: {
       tagline: (org.tagline as string | null) ?? null,
@@ -587,7 +575,6 @@ function readClaim(r: Record<string, unknown>, email: string | null): ClaimRow {
     organisationId: (r.organisation_id as string | null) ?? null,
     organisationName: (embedded(r.organisations)?.name as string | null) ?? null,
     proposedName: (r.proposed_name as string | null) ?? null,
-    proposedLegalName: (r.proposed_legal_name as string | null) ?? null,
     proposedCountryCode: (r.proposed_country_code as string | null) ?? null,
     proposedWebsite: (r.proposed_website as string | null) ?? null,
     proposedAddress: (r.proposed_address as string | null) ?? null,

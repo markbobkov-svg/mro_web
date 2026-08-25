@@ -101,11 +101,6 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
             </span>
           )}
         </h3>
-        {org.legalName && org.legalName !== org.name && (
-          <p className="mt-0.5 truncate text-xs text-white/40">
-            {org.legalName}
-          </p>
-        )}
         {org.tagline && (
           <p className="mt-1 text-xs leading-relaxed text-white/55">
             {org.tagline}
@@ -326,42 +321,10 @@ export default function OrgCard({ org }: { org: OrgAtAirport }) {
         </div>
       )}
 
-      {/* org-level contact fallback */}
-      {org.contacts.length === 0 && (org.phone || org.email || org.website) && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-          {org.phone && (
-            <a
-              href={`tel:${org.phone.replace(/\s+/g, "")}`}
-              className="text-white/55 transition hover:text-white"
-            >
-              {org.phone}
-            </a>
-          )}
-          {org.email && (
-            <a
-              href={`mailto:${org.email}`}
-              className="truncate text-white/55 transition hover:text-white"
-            >
-              {org.email}
-            </a>
-          )}
-          {org.website && (
-            <a
-              href={normaliseUrl(org.website)}
-              target="_blank"
-              rel="noreferrer"
-              title="Open website"
-              aria-label="Open website"
-              className="text-accent-bright/80 transition hover:text-accent-bright"
-            >
-              <WwwIcon />
-            </a>
-          )}
-        </div>
-      )}
-
-      {/* website when contacts exist */}
-      {org.contacts.length > 0 && org.website && (
+      {/* The website, desks or no desks. There is no longer a phone/e-mail
+          fallback to pair it with: 0008 dropped those columns and the values
+          became desks, so anything reachable is in `contacts` above. */}
+      {org.website && (
         <div className="mt-2">
           <a
             href={normaliseUrl(org.website)}

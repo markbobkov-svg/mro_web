@@ -131,7 +131,11 @@ their own rows. 0002 and 0004 are kept only so the history reads straight —
 drops `organisation_profiles.phone / email / aog_phone / aog_email` now that
 desks carry every way of reaching a person, and
 **`0007_fold_profiles_into_organisations.sql`**, which folds what is left of
-that table into `organisations` and drops it.
+that table into `organisations` and drops it. Then
+**`0008_drop_duplicate_contact_columns.sql`**, which drops every column that
+duplicated something the model already held: `organisations.phone / .email /
+.legal_name`, `organisation_stations.phone / .email` and
+`organisation_contacts.station_iata / .station_icao`.
 
 > **0007 must be applied before the code that goes with it is deployed.** Reads
 > tolerate either schema (both selects use `*`), but `saveProfileAction` updates
@@ -229,12 +233,22 @@ means setting `station_id`.
 `orgWide=1` — an explicit ask, so a bug in the station form can never quietly
 detach a desk from its airport.
 
-**The Profile tab holds tagline, description, logo, website and address — and
-nothing that reaches a person.** Every phone and e-mail is a desk now, so those
-fields came off the form, then out of the reads, and finally out of the schema
-(0006 dropped the four columns, 0007 dropped the table around them). The card's
-no-desks fallback is `station ?? org` for phone and e-mail, and there is no AOG
-block: an AOG desk is a desk named "AOG", with its own hours like any other.
+**`organisation_contacts` is the only place a phone or an e-mail lives.** Not
+the profile, not the organisation, not the station — 0006, 0007 and 0008 took
+the columns away in that order, each time turning what was in them into desks
+first. So the card has no phone/e-mail fallback left: whatever is reachable is
+in `contacts`, and only the website shows beside it. An AOG desk is a desk named
+"AOG", with its own hours like any other.
+
+The Profile tab holds tagline, description, logo, website and address; a station
+holds its address and whether it is a main base. Neither holds a way to call
+anyone.
+
+**One name, `organisations.name`.** 0008 dropped `legal_name`, and with it the
+second line on the card, the claim form's "Legal name" field and
+`organisation_claims.proposed_legal_name`. Search indexes `name` alone now — an
+operator searching the legal entity name will no longer match, which is the
+cost of the simplification.
 
 `organisation_contacts.contact_key` is generated and UNIQUE **per organisation,
 station not included**, so two byte-identical desks at two stations still clash;
@@ -312,13 +326,13 @@ Tables: `airports`, `authorities`, `organisations`, `organisation_stations`,
   write, `label` is the older one and is null on every dashboard-entered desk.
   Read `function_label ?? label` — reading `label` alone once left 19 of 27
   contacts at TLL captionless on the public card.
-- **Opening hours belong to a desk, not to a station.** `organisation_contacts`
-  carries `hours` and can hold several desks per station, which is where a
-  "24/7" or "Mon–Fri 06:00–22:00" goes. `organisation_stations.phone/email` is
-  vestigial scraper data — filled on 22 of 7096 rows — and only ever collapses
-  into the card's one-line fallback (`station ?? org`, shown only when there are
-  no desks), which has no hours slot. A station-level `hours` column was written
-  and reverted for exactly this reason: nothing on the map could ever display it.
+- **Opening hours belong to a desk, and so does everything else you can dial.**
+  `organisation_contacts` carries `hours` and holds several desks per station,
+  which is where a "24/7" or "Mon–Fri 06:00–22:00" goes. A station-level `hours`
+  column was written and reverted before that was settled — nothing on the map
+  could display it, because a station's own phone had no hours slot. 0008 then
+  removed the station phone entirely (22 of 7096 rows, folded into desks), so
+  the question cannot come back.
 
 ## Gotchas
 

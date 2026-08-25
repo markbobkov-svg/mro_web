@@ -43,9 +43,6 @@ export default async function OrganisationDashboard({
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-normal tracking-wide2 text-white">{org.name}</h1>
-        {org.legalName && org.legalName !== org.name ? (
-          <p className="text-sm text-white/35">{org.legalName}</p>
-        ) : null}
       </div>
 
       {searchParams.claimed === "1" ? (

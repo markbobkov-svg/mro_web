@@ -75,7 +75,7 @@ async function buildIndex(): Promise<Index> {
   const [airportRows, stationRows, orgRows, scopeRows] = await Promise.all([
     readAll(supabase, "airports", "id, iata_code, icao_code, name, city, country_code"),
     readAll(supabase, "organisation_stations", "airport_id, organisation_id"),
-    readAll(supabase, "organisations", "id, name, legal_name"),
+    readAll(supabase, "organisations", "id, name"),
     readAll(
       supabase,
       "organisation_scope",
@@ -89,7 +89,8 @@ async function buildIndex(): Promise<Index> {
     orgs.set(o.id, {
       id: o.id,
       name: o.name ?? "Unknown organisation",
-      nameText: `${o.name ?? ""} ${o.legal_name ?? ""}`.toLowerCase(),
+      // 0008 dropped legal_name; `name` is the only name there is.
+      nameText: `${o.name ?? ""}`.toLowerCase(),
       scope: [],
       scopeText: "",
     });

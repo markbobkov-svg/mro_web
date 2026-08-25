@@ -62,17 +62,20 @@ export interface Contact {
 export interface OrgAtAirport {
   stationId: string;
   organisationId: string;
+  /** The only name there is — 0008 dropped organisations.legal_name. */
   name: string;
-  legalName: string | null;
   /** 'line' | 'base' | 'both' — derived from the station's scope rows. */
   locationScope: string | null;
   countryCode: string | null;
   address: string | null;
-  phone: string | null;
-  email: string | null;
   website: string | null;
   /** Approvals + scope grouped by authority, EASA first (the default view). */
   authorities: AuthorityGroup[];
+  /**
+   * Every way of reaching a person, and the only one: 0008 dropped the phone
+   * and e-mail columns on `organisations` and `organisation_stations` after
+   * turning what they held into desks.
+   */
   contacts: Contact[];
 
   // --- filled in from the organisation's own dashboard, when it has one ---

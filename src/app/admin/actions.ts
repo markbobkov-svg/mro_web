@@ -76,7 +76,6 @@ export async function approveClaimAction(
         .from("organisations")
         .insert({
           name: claim.proposed_name,
-          legal_name: claim.proposed_legal_name,
           country_code: claim.proposed_country_code,
           website: claim.proposed_website,
           address: claim.proposed_address,
@@ -367,8 +366,7 @@ async function applyStation(
     organisation_id: orgId,
     ...(airportId ? { airport_id: airportId } : {}),
     ...(p.address ? { address: p.address } : {}),
-    ...(p.phone ? { phone: p.phone } : {}),
-    ...(p.email ? { email: p.email } : {}),
+    // No phone/email: 0008 dropped them, contacts hold every number now.
   };
 
   if (action === "add") {

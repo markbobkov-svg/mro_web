@@ -154,7 +154,6 @@ export async function requestNewOrgAction(
     kind: "new",
     organisation_id: null,
     proposed_name: name,
-    proposed_legal_name: nullable(data, "legalName"),
     proposed_country_code: (nullable(data, "countryCode") ?? "").toUpperCase() || null,
     proposed_website: nullable(data, "website"),
     proposed_address: nullable(data, "address"),
@@ -646,15 +645,12 @@ export async function saveStationAction(
   const stationId = str(data, "stationId");
   const airportCode = str(data, "airportCode");
 
-  // No `hours` here on purpose: when that station phone is answered belongs to
-  // a desk (organisation_contacts.hours), which already carries hours and can
-  // hold several numbers per station. The station's own phone is the scraped
-  // last-resort line at the foot of a card with no desks, not a contact in its
-  // own right.
+  // A station is a place, not a contact: where it is, and whether it is a main
+  // base. Every phone and e-mail is a desk in organisation_contacts, which
+  // carries hours and takes as many as a station needs — 0008 dropped the
+  // columns that used to sit here.
   const details = {
     address: nullable(data, "address"),
-    phone: nullable(data, "phone"),
-    email: nullable(data, "email"),
     is_base: bool(data, "isBase"),
   };
 

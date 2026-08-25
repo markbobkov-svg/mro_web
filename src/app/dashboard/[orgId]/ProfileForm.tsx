@@ -52,7 +52,7 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
       <Field label="Tagline" hint="one line, shown under your name">
         <Input
           name="tagline"
-          defaultValue={p?.tagline ?? ""}
+          defaultValue={p.tagline ?? ""}
           maxLength={120}
           placeholder="Line and base maintenance for narrow-body fleets"
         />
@@ -62,7 +62,7 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
         <Textarea
           name="description"
           rows={4}
-          defaultValue={p?.description ?? ""}
+          defaultValue={p.description ?? ""}
           placeholder="What you do, which fleets you cover, how fast you can respond."
         />
       </Field>
@@ -71,7 +71,7 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
         <Input
           name="logoUrl"
           type="url"
-          defaultValue={p?.logoUrl ?? ""}
+          defaultValue={p.logoUrl ?? ""}
           placeholder="https://example.com/logo.svg"
         />
       </Field>
@@ -79,21 +79,21 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
       {/* Website and address only. Every way of reaching a person — the phone,
           the e-mail, the AOG number — is a desk now: organisation-wide ones
           below, per-airport ones on the Stations tab, each with its own hours.
-          saveProfileAction leaves the old profile phone/e-mail/AOG columns
-          alone rather than nulling them, since nothing posts them any more. */}
+          These write straight to `organisations` (0007); there is no separate
+          scraped value underneath to fall back to any more. */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Website">
           <Input
             name="website"
             type="url"
-            defaultValue={p?.website ?? org.scraped.website ?? ""}
+            defaultValue={p.website ?? ""}
             placeholder="https://…"
           />
         </Field>
         <Field label="Address">
           <Input
             name="address"
-            defaultValue={p?.address ?? org.scraped.address ?? ""}
+            defaultValue={p.address ?? ""}
             placeholder="Street, City, Country"
           />
         </Field>
@@ -101,7 +101,7 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
 
       <div className="flex items-center justify-between gap-4 pt-1">
         <p className="text-xs text-white/25">
-          {p?.updatedAt ? `Last saved ${formatDate(p.updatedAt)}` : "Not edited yet"}
+          {p.updatedAt ? `Last saved ${formatDate(p.updatedAt)}` : "Not edited yet"}
         </p>
         <SubmitButton pendingLabel="Saving…">Save profile</SubmitButton>
       </div>

@@ -11,9 +11,9 @@ import { acceptableDomains } from "./domains";
  */
 
 /**
- * What the Profile tab maintains. No phone / e-mail / AOG: every way of
- * reaching a person is a desk in `organisation_contacts`, and migration 0006
- * drops those columns from `organisation_profiles`.
+ * What the Profile tab maintains — columns on `organisations` itself since
+ * migration 0007. No phone / e-mail / AOG: every way of reaching a person is a
+ * desk in `organisation_contacts` (0006 dropped those columns).
  */
 export interface OrgProfile {
   tagline: string | null;
@@ -222,14 +222,12 @@ export interface DashboardOrg {
   name: string;
   legalName: string | null;
   countryCode: string | null;
-  /** Scraped values — shown as the fallback under each override field. */
-  scraped: {
-    website: string | null;
-    email: string | null;
-    phone: string | null;
-    address: string | null;
-  };
-  profile: OrgProfile | null;
+  /**
+   * The editable profile. No longer nullable and no separate `scraped` block:
+   * since 0007 these are columns on `organisations`, so the scraped value and
+   * the organisation's own edit are the same field — whoever wrote last.
+   */
+  profile: OrgProfile;
   approvals: DashboardApproval[];
   /** Stations, each carrying its own desks and certified scope. */
   stations: DashboardStation[];
@@ -274,7 +272,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
   // is no override layer to merge any more (see migration 0005).
   const [
     orgRes,
-    profileRes,
     approvalsRes,
     stationsRes,
     contactsRes,
@@ -282,15 +279,13 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
     stationScopeRes,
     crRes,
   ] = await Promise.all([
+    // `*` because the profile columns (tagline, description, logo_url,
+    // profile_updated_at) arrive with migration 0007: naming one that is not
+    // there yet would fail the whole read and empty the dashboard.
     supabase
       .from("organisations")
-      .select("id, name, legal_name, country_code, website, email, phone, address")
-      .eq("id", orgId)
-      .maybeSingle(),
-    supabase
-      .from("organisation_profiles")
       .select("*")
-      .eq("organisation_id", orgId)
+      .eq("id", orgId)
       .maybeSingle(),
     supabase
       .from("organisation_approvals")
@@ -335,8 +330,6 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
 
   const org = orgRes.data as Record<string, unknown> | null;
   if (!org) return null;
-
-  const p = profileRes.data as Record<string, unknown> | null;
 
   const readContact = (c: Record<string, unknown>): DashboardContact => ({
     id: String(c.id),
@@ -429,22 +422,14 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
     name: String(org.name ?? "Unnamed"),
     legalName: (org.legal_name as string | null) ?? null,
     countryCode: (org.country_code as string | null) ?? null,
-    scraped: {
+    profile: {
+      tagline: (org.tagline as string | null) ?? null,
+      description: (org.description as string | null) ?? null,
+      logoUrl: (org.logo_url as string | null) ?? null,
       website: (org.website as string | null) ?? null,
-      email: (org.email as string | null) ?? null,
-      phone: (org.phone as string | null) ?? null,
       address: (org.address as string | null) ?? null,
+      updatedAt: (org.profile_updated_at as string | null) ?? null,
     },
-    profile: p
-      ? {
-          tagline: (p.tagline as string | null) ?? null,
-          description: (p.description as string | null) ?? null,
-          logoUrl: (p.logo_url as string | null) ?? null,
-          website: (p.website as string | null) ?? null,
-          address: (p.address as string | null) ?? null,
-          updatedAt: (p.updated_at as string | null) ?? null,
-        }
-      : null,
     approvals: ((approvalsRes.data as Record<string, unknown>[]) ?? []).map((a) => {
       const auth = embedded(a.authorities);
       return {

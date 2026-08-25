@@ -250,13 +250,12 @@ export async function getAirportDetail(
     scopeRows,
     contactsRes,
     authRes,
-    profilesRes,
     membersRes,
   ] = await Promise.all([
-      supabase
-        .from("organisations")
-        .select("id, name, legal_name, address, country_code, phone, email, website")
-        .in("id", orgIds),
+      // `*` because tagline / description / logo_url move onto this table with
+      // migration 0007, and naming a column that is not there yet would fail
+      // the whole read and empty every card at the airport.
+      supabase.from("organisations").select("*").in("id", orgIds),
       supabase
         .from("organisation_approvals")
         .select(
@@ -275,17 +274,6 @@ export async function getAirportDetail(
         )
         .in("organisation_id", orgIds),
       supabase.from("authorities").select("id, code, name"),
-      // The organisation-maintained layer. Kept in its own tables so a re-scrape
-      // can never overwrite what an organisation typed; merged over the scraped
-      // values here, at read time.
-      supabase
-        .from("organisation_profiles")
-        .select(
-          // No email / phone / aog_*: desks carry every way of reaching a
-          // person, and those columns are no longer read or editable.
-          "organisation_id, tagline, description, logo_url, website, address",
-        )
-        .in("organisation_id", orgIds),
       supabase
         .from("organisation_members")
         .select("organisation_id")
@@ -301,14 +289,6 @@ export async function getAirportDetail(
     if (res.error) throw new Error(`getAirportDetail(${label}): ${res.error.message}`);
   }
 
-  // The dashboard tables are additive: if the migration hasn't been applied to
-  // this database yet, the map must still work. Missing table => no overrides.
-  const profileByOrg = new Map<string, any>();
-  if (!profilesRes.error) {
-    for (const p of (profilesRes.data as any[]) ?? []) {
-      profileByOrg.set(p.organisation_id, p);
-    }
-  }
 
   // "Claimed" means someone from the organisation has been verified as owning
   // the listing — not that they have edited it yet, so this comes from
@@ -542,20 +522,16 @@ export async function getAirportDetail(
 
   const organisations: OrgAtAirport[] = stationRows.map((s) => {
     const org = orgById.get(s.organisation_id) ?? {};
-    const profile = profileByOrg.get(s.organisation_id) ?? null;
 
-    // `phone` and `email` here are the single-value fallback the card prints at
-    // its foot when an organisation has no desks at all — no station desks and
-    // no organisation-wide ones. In practice that is an unclaimed listing,
-    // where nobody has been along to enter desks. Both columns are scraped.
+    // Everything organisation-level comes from `organisations` — one row, no
+    // override layer to merge (0007 folded organisation_profiles back into it).
+    // The station's value still wins for address, since a station has an
+    // address of its own and the organisation's is the head office.
     //
-    // `organisation_profiles.phone` / `.email` are deliberately not in this
-    // chain: they are the old single-contact model, dropped by migration 0006,
-    // and a stale value there used to sit above every desk.
-    //
-    // `website` and `address` are not contacts and behave differently: website
-    // shows even when desks do, and both still take the profile's value first,
-    // since the Profile tab maintains them.
+    // `phone` and `email` are the single-value fallback the card prints at its
+    // foot when an organisation has no desks at all — no station desks and no
+    // organisation-wide ones. In practice that is an unclaimed listing, where
+    // nobody has been along to enter desks.
     return {
       stationId: s.id,
       organisationId: s.organisation_id,
@@ -563,16 +539,16 @@ export async function getAirportDetail(
       legalName: org.legal_name ?? null,
       locationScope: deriveLocationScope(stationLocScope.get(s.id) ?? []),
       countryCode: s.country_code ?? org.country_code ?? null,
-      address: profile?.address ?? s.address ?? org.address ?? null,
+      address: s.address ?? org.address ?? null,
       phone: s.phone ?? org.phone ?? null,
       email: s.email ?? org.email ?? null,
-      website: profile?.website ?? org.website ?? null,
+      website: org.website ?? null,
       authorities: buildAuthorities(s.organisation_id),
       contacts: desksForStation(String(s.id), s.organisation_id),
       claimed: claimedOrgs.has(s.organisation_id),
-      tagline: profile?.tagline ?? null,
-      description: profile?.description ?? null,
-      logoUrl: profile?.logo_url ?? null,
+      tagline: org.tagline ?? null,
+      description: org.description ?? null,
+      logoUrl: org.logo_url ?? null,
     };
   });
 

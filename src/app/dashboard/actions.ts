@@ -182,25 +182,23 @@ export async function saveProfileAction(
     await requireMember(user, organisationId);
 
     const supabase = getAdminSupabase();
-    // Website and address only. The profile's phone / e-mail / AOG columns are
-    // deliberately absent: the form stopped offering them once desks took over
-    // (organisation-wide ones on the Profile tab, per-airport ones on
-    // Stations), and writing `nullable(data, …)` for a field the form no longer
-    // posts would silently wipe whatever is still in those columns on the next
-    // save. Leaving them out keeps the old values until someone clears them on
-    // purpose.
-    const { error } = await supabase.from("organisation_profiles").upsert(
-      {
-        organisation_id: organisationId,
+    // Straight into `organisations` since migration 0007 — the same table every
+    // other tab writes. There is no override layer left to merge.
+    //
+    // Website and address only, besides the three descriptive fields: the
+    // phone / e-mail / AOG columns went to desks (0006), and an update naming
+    // only these columns cannot disturb the scraped ones beside them.
+    const { error } = await supabase
+      .from("organisations")
+      .update({
         tagline: nullable(data, "tagline"),
         description: nullable(data, "description"),
         logo_url: nullable(data, "logoUrl"),
         website: nullable(data, "website"),
         address: nullable(data, "address"),
-        updated_by: user.id,
-      },
-      { onConflict: "organisation_id" },
-    );
+        profile_updated_at: new Date().toISOString(),
+      })
+      .eq("id", organisationId);
     if (error) throw error;
   } catch (err) {
     return { error: toMessage(err) };

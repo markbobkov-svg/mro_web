@@ -129,7 +129,32 @@ into the real tables, drops it, and hands claimed organisations ownership of
 their own rows. 0002 and 0004 are kept only so the history reads straight —
 0005 supersedes both. Then **`0006_drop_profile_contact_columns.sql`**, which
 drops `organisation_profiles.phone / email / aog_phone / aog_email` now that
-desks carry every way of reaching a person.
+desks carry every way of reaching a person, and
+**`0007_fold_profiles_into_organisations.sql`**, which folds what is left of
+that table into `organisations` and drops it.
+
+> **0007 must be applied before the code that goes with it is deployed.** Reads
+> tolerate either schema (both selects use `*`), but `saveProfileAction` updates
+> `organisations` with `tagline / description / logo_url / profile_updated_at`,
+> and against the old schema PostgREST rejects that (PGRST204) so "Save profile"
+> fails. There is no retry-without-the-columns fallback on purpose: quietly
+> dropping a tagline someone just typed is worse than an error.
+
+**`organisation_profiles` is gone (0007), and that was the last of the override
+layer.** 0001 built it as a parallel table merged over the scraped row at read
+time; 0005 reversed that idea for contacts, stations and scope but never touched
+this one, so it survived as the only piece of an abandoned pattern. Now
+`tagline`, `description`, `logo_url` and `profile_updated_at` are columns on
+`organisations` — the table every other tab already writes — and `website` /
+`address` stopped being shadowed by a second copy. `DashboardOrg.scraped` went
+with it: there is no scraped-versus-typed pair any more, just the row.
+
+> `organisations` belongs to `data_scraper`, not to these migrations — 0007 only
+> **adds** columns to it. And the caveat below bites here: while the app and the
+> scraper share one service_role key, a re-scrape can overwrite the tagline,
+> description, website and address an organisation typed. Avoiding exactly that
+> is why the separate table existed, so moving off it is a deliberate trade,
+> and giving `data_scraper` its own key closes it.
 
 - **Accounts** are Supabase Auth, e-mail + password, confirmation required.
   All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
@@ -204,18 +229,12 @@ means setting `station_id`.
 `orgWide=1` — an explicit ask, so a bug in the station form can never quietly
 detach a desk from its airport.
 
-**The Profile tab holds only website and address, and desks outrank the header
-scalars.** Every way of reaching a person is a desk now, so the phone / e-mail /
-AOG fields came off that form, then out of the reads, and finally out of the
-schema — migration 0006 drops `organisation_profiles.phone`, `.email`,
-`.aog_phone` and `.aog_email`. The header chain is `station ?? org` for phone
-and e-mail, and the card has no AOG block (an AOG desk is a desk named "AOG").
-`profile.website` and `profile.address` stay in the chain, since the Profile tab
-still maintains them.
-
-Both selects survive the migration either way: `getDashboardOrg` reads
-`organisation_profiles` with `*`, and `getAirportDetail` names only the columns
-that remain. So the deploy and the migration can go in either order.
+**The Profile tab holds tagline, description, logo, website and address — and
+nothing that reaches a person.** Every phone and e-mail is a desk now, so those
+fields came off the form, then out of the reads, and finally out of the schema
+(0006 dropped the four columns, 0007 dropped the table around them). The card's
+no-desks fallback is `station ?? org` for phone and e-mail, and there is no AOG
+block: an AOG desk is a desk named "AOG", with its own hours like any other.
 
 `organisation_contacts.contact_key` is generated and UNIQUE **per organisation,
 station not included**, so two byte-identical desks at two stations still clash;

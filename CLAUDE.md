@@ -187,7 +187,12 @@ What the card shows at one airport (`desksForStation` in `data.ts`):
 1. desks whose `station_id` is **this** station — a desk pinned to another of
    the organisation's stations is dropped, not shown on every card;
 2. else the organisation-wide ones (`station_id is null`);
-3. else nothing, and `OrgCard` prints the header scalars instead.
+3. else no desks at all, and `OrgCard` prints a single fallback line at the
+   **foot** of the card instead — phone · e-mail · website, where phone and
+   e-mail come from `organisation_stations` then `organisations`, both scraped.
+   That is the unclaimed-listing case: nobody has been along to enter desks.
+   (These are values on the card, not a header — an early comment called them
+   "header scalars" and it was wrong.)
 
 **`station_iata` / `station_icao` are ignored.** Matching a desk to an airport
 by those scraped codes is gone: a row carrying a code but no `station_id`
@@ -292,9 +297,9 @@ Tables: `airports`, `authorities`, `organisations`, `organisation_stations`,
   carries `hours` and can hold several desks per station, which is where a
   "24/7" or "Mon–Fri 06:00–22:00" goes. `organisation_stations.phone/email` is
   vestigial scraper data — filled on 22 of 7096 rows — and only ever collapses
-  into the card header scalar (`profile ?? station ?? org`), which has no hours
-  slot. A station-level `hours` column was written and reverted for exactly
-  this reason: nothing on the map could ever display it.
+  into the card's one-line fallback (`station ?? org`, shown only when there are
+  no desks), which has no hours slot. A station-level `hours` column was written
+  and reverted for exactly this reason: nothing on the map could ever display it.
 
 ## Gotchas
 

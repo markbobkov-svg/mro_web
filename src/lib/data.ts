@@ -433,8 +433,9 @@ export async function getAirportDetail(
   // 2. station_id IS NULL -> organisation-wide, maintained on the Profile tab.
   //    Shown only when the station has no desks of its own.
   //
-  // When there are none of either, OrgCard falls back to the header scalars
-  // (station phone/e-mail, else the scraped organisation ones).
+  // When there are none of either, OrgCard prints one line of fallback links at
+  // the foot of the card instead (station phone/e-mail, else the scraped
+  // organisation ones) — see the `contacts.length === 0` branch there.
   const stationIdSet = new Set(stationIds.map((id) => String(id)));
   type Desk = { contact: Contact; sortOrder: number };
   const desksByStation = new Map<string, Desk[]>(); // station id -> its own desks
@@ -543,15 +544,18 @@ export async function getAirportDetail(
     const org = orgById.get(s.organisation_id) ?? {};
     const profile = profileByOrg.get(s.organisation_id) ?? null;
 
-    // Desks outrank the header scalars, so `organisation_profiles.phone` and
-    // `.email` are not in this chain: they are the old single-contact model,
-    // no longer editable in the dashboard, and a stale value there would
-    // otherwise sit above every desk. Address and website stay — the Profile
-    // tab still maintains those, and neither is a way to reach a person.
+    // `phone` and `email` here are the single-value fallback the card prints at
+    // its foot when an organisation has no desks at all — no station desks and
+    // no organisation-wide ones. In practice that is an unclaimed listing,
+    // where nobody has been along to enter desks. Both columns are scraped.
     //
-    // The scalars only ever surface when an organisation has no desks at all
-    // (see OrgCard), which now means: station's own desks, else the
-    // organisation-wide ones, else this.
+    // `organisation_profiles.phone` / `.email` are deliberately not in this
+    // chain: they are the old single-contact model, dropped by migration 0006,
+    // and a stale value there used to sit above every desk.
+    //
+    // `website` and `address` are not contacts and behave differently: website
+    // shows even when desks do, and both still take the profile's value first,
+    // since the Profile tab maintains them.
     return {
       stationId: s.id,
       organisationId: s.organisation_id,

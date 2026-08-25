@@ -650,8 +650,9 @@ export async function saveStationAction(
 
   // No `hours` here on purpose: when that station phone is answered belongs to
   // a desk (organisation_contacts.hours), which already carries hours and can
-  // hold several numbers per station. The station's own phone is a scraped
-  // fallback for the card header, not a contact in its own right.
+  // hold several numbers per station. The station's own phone is the scraped
+  // last-resort line at the foot of a card with no desks, not a contact in its
+  // own right.
   const details = {
     address: nullable(data, "address"),
     phone: nullable(data, "phone"),

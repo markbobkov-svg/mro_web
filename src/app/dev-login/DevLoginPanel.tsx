@@ -31,7 +31,7 @@ export default async function DevLoginPanel({ error }: { error?: string }) {
           {DEV_ACCOUNTS.map((account) => (
             <form key={account.email} action={devSignInAction}>
               <input type="hidden" name="email" value={account.email} />
-              <input type="hidden" name="dest" value={account.dest} />
+              <input type="hidden" name="dest" value="/" />
               <SubmitButton
                 variant={user?.email === account.email ? "primary" : "ghost"}
                 pendingLabel="Signing in…"
@@ -43,8 +43,8 @@ export default async function DevLoginPanel({ error }: { error?: string }) {
                 <span className="text-xs tracking-normal text-white/85">
                   {account.name}
                 </span>
-                <span className="font-mono text-[10px] tracking-normal text-white/35">
-                  {account.dest}
+                <span className="font-mono text-[10px] tracking-normal text-white/30">
+                  {account.email}
                 </span>
               </SubmitButton>
             </form>

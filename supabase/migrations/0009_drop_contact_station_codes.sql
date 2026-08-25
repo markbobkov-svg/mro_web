@@ -1,0 +1,60 @@
+-- ONE4FIVE — retire organisation_contacts.station_iata / .station_icao
+--
+-- NOT READY TO RUN. It needs a change in the data_scraper repo first; read this
+-- through before doing anything.
+--
+-- The app already ignores both columns: a desk is tied to its airport by
+-- `station_id` and nothing else (see desksForStation in data.ts). They should
+-- have gone with 0008 and could not, because:
+--
+--   ERROR: 2BP01: cannot drop column station_iata of table organisation_contacts
+--   DETAIL: column contact_key of table organisation_contacts depends on
+--           column station_iata of table organisation_contacts
+--
+-- `contact_key` is a GENERATED column, UNIQUE, built from the desk's fields
+-- including the two station codes — and `data_scraper` upserts on it
+-- (`on conflict (contact_key)`). So this is not a schema tidy-up, it is a change
+-- to another system's idempotency key.
+--
+-- What NOT to do: `drop column ... cascade`. It takes contact_key with it, the
+-- unique constraint disappears, and the scraper's next upsert either errors or
+-- starts inserting duplicates of every desk it has ever seen.
+--
+-- The real sequence, all of it before this file is any use:
+--
+--   1. In data_scraper, stop writing station_iata / station_icao. Desks it
+--      creates should carry `station_id`, resolved from the airport code it
+--      already knows. Until that lands, dropping the columns breaks the scrape.
+--   2. Decide what contact_key should be generated from instead. Dropping the
+--      codes changes the KEY VALUE of every existing row, so the first run
+--      afterwards will not match what is in the table: it will insert rather
+--      than update. Plan for that — either accept one round of duplicates and
+--      dedupe, or migrate the key and the rows together in one transaction.
+--   3. Only then run the statements at the foot of this file.
+--
+-- Inspect the current definition first (pg_catalog, not information_schema —
+-- the latter can report an empty generation_expression and that is what made an
+-- earlier preflight check pass when it should have failed):
+--
+--   select a.attname,
+--          a.attgenerated,
+--          pg_get_expr(d.adbin, d.adrelid) as expression
+--     from pg_attribute a
+--     join pg_attrdef  d on d.adrelid = a.attrelid and d.adnum = a.attnum
+--    where a.attrelid = 'public.organisation_contacts'::regclass
+--      and a.attgenerated <> '';
+--
+-- Apply by hand in the Supabase SQL editor, once steps 1-3 are done.
+
+-- --------------------------------------------------------------------------
+-- Left commented out on purpose: uncomment only after contact_key has been
+-- redefined without the station codes, in step 2 above.
+--
+-- alter table public.organisation_contacts
+--   drop column if exists station_iata,
+--   drop column if exists station_icao;
+--
+-- The index over the two columns goes automatically with them:
+--   idx_oc_stn on organisation_contacts (station_iata, station_icao)
+-- An index never blocks a DROP COLUMN — Postgres removes it for you. Only the
+-- generated column does.

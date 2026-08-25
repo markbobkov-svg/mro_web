@@ -132,10 +132,20 @@ drops `organisation_profiles.phone / email / aog_phone / aog_email` now that
 desks carry every way of reaching a person, and
 **`0007_fold_profiles_into_organisations.sql`**, which folds what is left of
 that table into `organisations` and drops it. Then
-**`0008_drop_duplicate_contact_columns.sql`**, which drops every column that
+**`0008_drop_duplicate_contact_columns.sql`**, which drops the columns that
 duplicated something the model already held: `organisations.phone / .email /
-.legal_name`, `organisation_stations.phone / .email` and
-`organisation_contacts.station_iata / .station_icao`.
+.legal_name` and `organisation_stations.phone / .email`.
+
+> `organisation_contacts.station_iata / .station_icao` were meant to go with
+> them and **could not**: `contact_key` is a GENERATED UNIQUE column built from
+> those codes, and `data_scraper` upserts on it. Dropping them changes another
+> system's idempotency key, so it waits for a change there —
+> `0009_drop_contact_station_codes.sql` is written but deliberately left
+> commented out, with the sequence it needs. The app already ignores both
+> columns. Note for next time: `information_schema.columns.generation_expression`
+> came back empty here, so a preflight built on it passed when it should have
+> failed — use `pg_get_expr(pg_attrdef.adbin, …)` with `pg_attribute.attgenerated`
+> instead. An index over a column never blocks a drop; a generated column does.
 
 > **0007 must be applied before the code that goes with it is deployed.** Reads
 > tolerate either schema (both selects use `*`), but `saveProfileAction` updates

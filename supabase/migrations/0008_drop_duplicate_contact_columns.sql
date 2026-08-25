@@ -5,8 +5,12 @@
 --   organisations.phone / .email           -> organisation_contacts
 --   organisation_stations.phone / .email   -> organisation_contacts (per station)
 --   organisations.legal_name               -> just `name`
---   organisation_contacts.station_iata     -> station_id
---   organisation_contacts.station_icao     -> station_id
+--
+-- organisation_contacts.station_iata / .station_icao were meant to go too — the
+-- app stopped reading them, station_id is the only link now — but they cannot:
+-- `contact_key` is a generated UNIQUE column built from them, and data_scraper
+-- upserts on it. Dropping them needs contact_key redefined there first, so it
+-- lives in 0009 and is deliberately not part of this migration.
 --
 -- Both phone/email pairs fed one thing: the single line of links OrgCard printed
 -- at the foot of a card when an organisation had NO desks at all. That is not a
@@ -26,35 +30,6 @@
 -- column is what breaks, and the deploy is what stops the reads.
 --
 -- Apply by hand in the Supabase SQL editor. Safe to re-run.
-
--- ---------------------------------------------------------------- preflight --
--- `contact_key` is a generated, UNIQUE column created by data_scraper, which
--- upserts on it. If its expression mentions the station codes, dropping them
--- fails — and redefining the key is a data_scraper change, not ours. Check
--- before touching anything, so this stops here rather than half-done.
---
--- To see the expression yourself:
---   select column_name, generation_expression
---     from information_schema.columns
---    where table_schema = 'public'
---      and table_name   = 'organisation_contacts'
---      and is_generated = 'ALWAYS';
-
-do $$
-declare expr text;
-begin
-  select generation_expression into expr
-    from information_schema.columns
-   where table_schema = 'public'
-     and table_name   = 'organisation_contacts'
-     and column_name  = 'contact_key';
-
-  if expr is not null and expr ~* 'station_i(ata|cao)' then
-    raise exception
-      'contact_key is generated from the station codes (%). Redefine it in '
-      'data_scraper first — it upserts on this key — then re-run.', expr;
-  end if;
-end $$;
 
 -- ------------------------------------------------- keep the contacts first ---
 
@@ -94,10 +69,6 @@ alter table public.organisations
 alter table public.organisation_stations
   drop column if exists phone,
   drop column if exists email;
-
-alter table public.organisation_contacts
-  drop column if exists station_iata,
-  drop column if exists station_icao;
 
 -- `proposed_legal_name` existed only to fill organisations.legal_name when an
 -- admin approves a new-organisation claim. With no column to fill, the claim

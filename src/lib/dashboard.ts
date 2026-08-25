@@ -234,6 +234,11 @@ export interface DashboardOrg {
   stations: DashboardStation[];
   /** The organisation's own certified scope — organisation_scope. */
   orgScope: DashboardScopeLine[];
+  /**
+   * Desks with no station, maintained on the Profile tab. They stand in at any
+   * station that has no desks of its own — see getAirportDetail.
+   */
+  orgContacts: DashboardContact[];
   changeRequests: ChangeRequest[];
 }
 
@@ -363,19 +368,25 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
   const byOrder = (a: { sortOrder: number }, b: { sortOrder: number }) =>
     a.sortOrder - b.sortOrder;
 
-  // Contacts, grouped under the station each one answers for. A row with no
-  // station is scraped organisation-wide data the dashboard no longer maintains
-  // — migration 0006 attaches a claimed organisation's to one of its stations,
-  // and until then it is simply not shown here (the map still falls back to it).
+  // Contacts split by what they answer for: a station's own desks, and the
+  // organisation-wide ones the Profile tab maintains, which stand in wherever a
+  // station has none. Migration 0006 attached the station-less desks a claimed
+  // organisation had from the old model to a station; anything left here is
+  // either scraped or was entered on the Profile tab since.
   const contactsByStation = new Map<string, DashboardContact[]>();
+  const orgContacts: DashboardContact[] = [];
   for (const raw of (contactsRes.data as Record<string, unknown>[]) ?? []) {
     const c = readContact(raw);
-    if (!c.stationId) continue;
+    if (!c.stationId) {
+      orgContacts.push(c);
+      continue;
+    }
     const list = contactsByStation.get(c.stationId) ?? [];
     list.push(c);
     contactsByStation.set(c.stationId, list);
   }
   for (const list of contactsByStation.values()) list.sort(byOrder);
+  orgContacts.sort(byOrder);
 
   // Per-station scope, grouped by the station it belongs to.
   const scopeByStation = new Map<string, DashboardScopeLine[]>();
@@ -452,6 +463,7 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
     }),
     stations,
     orgScope: ((orgScopeRes.data as Record<string, unknown>[]) ?? []).map(readScope),
+    orgContacts,
     changeRequests: ((crRes.data as Record<string, unknown>[]) ?? []).map(readChangeRequest),
   };
 }

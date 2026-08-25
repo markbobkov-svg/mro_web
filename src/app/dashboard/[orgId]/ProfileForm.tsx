@@ -5,10 +5,40 @@ import { useFormState } from "react-dom";
 import { saveProfileAction, type ActionState } from "../actions";
 import type { DashboardOrg } from "@/lib/dashboard";
 import { Alert, Field, Input, SubmitButton, Textarea } from "@/components/ui/Form";
+import { ContactsBlock } from "./ContactsBlock";
 
 const EMPTY: ActionState = {};
 
 export function ProfileForm({ org }: { org: DashboardOrg }) {
+  return (
+    <div className="space-y-4">
+      <ProfileFields org={org} />
+
+      {/* Its own panel, and deliberately outside the form above: each desk is a
+          form of its own, and a form inside a form is invalid HTML — the inner
+          one is dropped and its fields post to the outer action instead. */}
+      <div className="rounded-[2px] border border-white/10 bg-[#141414]/60 p-5">
+        <p className="text-[11px] uppercase tracking-wide2 text-white/50">
+          Contact desks
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-white/40">
+          The organisation&rsquo;s own desks, each with its own phone hours.
+          They stand in at any of your airports that has no desks of its own —
+          add those on the Stations tab, where they belong to one airport.
+        </p>
+        <ContactsBlock
+          org={org}
+          stationId={null}
+          contacts={org.orgContacts}
+          title="Organisation-wide desks"
+          emptyText="None yet — the phone, e-mail and website above are shown instead. Add a desk to give operators a named number with its own hours."
+        />
+      </div>
+    </div>
+  );
+}
+
+function ProfileFields({ org }: { org: DashboardOrg }) {
   const [state, action] = useFormState(saveProfileAction, EMPTY);
   const p = org.profile;
 

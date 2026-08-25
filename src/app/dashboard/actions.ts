@@ -284,10 +284,16 @@ export async function saveContactAction(
   const user = await requireUser();
   const organisationId = str(data, "organisationId");
   const contactId = str(data, "contactId");
-  // Every desk answers for one station: a station can hold as many as it needs,
-  // and a station with none shows the organisation's profile details instead.
-  // There are no organisation-wide desks any more (see migration 0006).
+  // A desk either answers for one station — a station takes as many as it needs
+  // — or is the organisation's own, edited on the Profile tab, which stands in
+  // for any station with no desks of its own (see getAirportDetail).
+  //
+  // The organisation-wide case has to be asked for explicitly rather than
+  // inferred from a missing station: that way a bug in the station form can
+  // never quietly detach a desk from its airport, which is what migration 0006
+  // had to go and clean up.
   const stationId = str(data, "stationId");
+  const orgWide = str(data, "orgWide") === "1";
 
   const row = {
     organisation_id: organisationId,
@@ -300,7 +306,9 @@ export async function saveContactAction(
     sort_order: Number(str(data, "sortOrder") || 0),
   };
 
-  if (!stationId) return { error: "Pick the station this contact answers for." };
+  if (!stationId && !orgWide) {
+    return { error: "Pick the station this contact answers for." };
+  }
   if (!row.function_label && !row.name && !row.phone && !row.email) {
     return { error: "Give the desk a name, a phone or an e-mail." };
   }
@@ -308,7 +316,7 @@ export async function saveContactAction(
   try {
     await requireMember(user, organisationId);
     const supabase = getAdminSupabase();
-    await assertOwnStation(supabase, organisationId, stationId);
+    if (stationId) await assertOwnStation(supabase, organisationId, stationId);
 
     if (contactId) {
       const { error } = await supabase

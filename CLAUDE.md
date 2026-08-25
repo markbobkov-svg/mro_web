@@ -177,18 +177,23 @@ enforces that for every role except `service_role`.
 
 `organisation_contacts.station_id` ties a desk to the one station it answers
 for, and a station takes **as many desks as it needs** — each with its own
-`hours`. There are no organisation-wide desks in the dashboard any more: a
-station with none of its own shows the **profile** contact details (phone /
-e-mail / website, the `profile ?? station ?? org` scalar in the card header)
-instead. Migration `0006_station_desks.sql` rehomes the station-less rows a
-claimed organisation still had from the old model — pick the station the desk
-names, else a main base, else the first by code.
+`hours`. **Desks live at two levels, and both are edited with the same
+component** (`ContactsBlock`): the **Stations** tab maintains a station's own,
+the **Profile** tab the organisation-wide ones (`station_id is null`). A station
+with no desks of its own falls back to the organisation-wide ones, and when
+there are none of those either, to the **profile** scalars (phone / e-mail /
+website, the `profile ?? station ?? org` card header).
 
-Station-less contacts remain for **unclaimed** listings: they are scraped data,
-and `getAirportDetail` still shows them as the fallback for a station with no
-desks of its own. What it no longer does is show a *station's* desk on every one
-of that organisation's cards — a desk is dropped unless its `station_id` (or, on
-older scraped rows, its `station_iata` / `station_icao`) is this airport's.
+`saveContactAction` will only create a station-less desk when the form posts
+`orgWide=1` — an explicit ask, so a bug in the station form can never quietly
+detach a desk from its airport. Migration `0006_station_desks.sql` rehomed the
+station-less rows a claimed organisation had from the old model (pick the
+station the desk names, else a main base, else the first by code); anything
+station-less now is either scraped or was entered on the Profile tab.
+
+`getAirportDetail` does *not* show a *station's* desk on every one of that
+organisation's cards — a desk is dropped unless its `station_id` (or, on older
+scraped rows, its `station_iata` / `station_icao`) is this airport's.
 
 `organisation_contacts.contact_key` is generated and UNIQUE **per organisation,
 station not included**, so two byte-identical desks at two stations still clash;

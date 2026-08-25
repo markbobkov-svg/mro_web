@@ -10,16 +10,17 @@ import { acceptableDomains } from "./domains";
  * `requireMember` / `requireAdmin` in guards.ts first.
  */
 
+/**
+ * What the Profile tab maintains. No phone / e-mail / AOG: every way of
+ * reaching a person is a desk in `organisation_contacts`, and migration 0006
+ * drops those columns from `organisation_profiles`.
+ */
 export interface OrgProfile {
   tagline: string | null;
   description: string | null;
   logoUrl: string | null;
   website: string | null;
-  email: string | null;
-  phone: string | null;
   address: string | null;
-  aogPhone: string | null;
-  aogEmail: string | null;
   updatedAt: string | null;
 }
 
@@ -440,11 +441,7 @@ export async function getDashboardOrg(orgId: string): Promise<DashboardOrg | nul
           description: (p.description as string | null) ?? null,
           logoUrl: (p.logo_url as string | null) ?? null,
           website: (p.website as string | null) ?? null,
-          email: (p.email as string | null) ?? null,
-          phone: (p.phone as string | null) ?? null,
           address: (p.address as string | null) ?? null,
-          aogPhone: (p.aog_phone as string | null) ?? null,
-          aogEmail: (p.aog_email as string | null) ?? null,
           updatedAt: (p.updated_at as string | null) ?? null,
         }
       : null,

@@ -127,8 +127,9 @@ Migrations, all applied by hand in the Supabase SQL editor:
 override layer), then **`0005_org_owned_data.sql`**, which folds that layer back
 into the real tables, drops it, and hands claimed organisations ownership of
 their own rows. 0002 and 0004 are kept only so the history reads straight —
-0005 supersedes both. **0005 is the last one**: nothing since has needed a
-schema change.
+0005 supersedes both. Then **`0006_drop_profile_contact_columns.sql`**, which
+drops `organisation_profiles.phone / email / aog_phone / aog_email` now that
+desks carry every way of reaching a person.
 
 - **Accounts** are Supabase Auth, e-mail + password, confirmation required.
   All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
@@ -200,14 +201,16 @@ detach a desk from its airport.
 
 **The Profile tab holds only website and address, and desks outrank the header
 scalars.** Every way of reaching a person is a desk now, so the phone / e-mail /
-AOG fields came off that form — and `organisation_profiles.phone`, `.email`,
-`.aog_phone` and `.aog_email` are no longer *read* either: the header chain is
-`station ?? org` for phone and e-mail, and the card's AOG block is gone (an AOG
-desk is a desk named "AOG"). `profile.website` and `profile.address` stay in the
-chain, since the Profile tab still maintains them. `saveProfileAction` does not
-write the dropped columns rather than nulling them — writing `nullable(data, …)`
-for a field the form no longer posts would wipe them on the next save — so the
-old values sit in the database, unread and harmless.
+AOG fields came off that form, then out of the reads, and finally out of the
+schema — migration 0006 drops `organisation_profiles.phone`, `.email`,
+`.aog_phone` and `.aog_email`. The header chain is `station ?? org` for phone
+and e-mail, and the card has no AOG block (an AOG desk is a desk named "AOG").
+`profile.website` and `profile.address` stay in the chain, since the Profile tab
+still maintains them.
+
+Both selects survive the migration either way: `getDashboardOrg` reads
+`organisation_profiles` with `*`, and `getAirportDetail` names only the columns
+that remain. So the deploy and the migration can go in either order.
 
 `organisation_contacts.contact_key` is generated and UNIQUE **per organisation,
 station not included**, so two byte-identical desks at two stations still clash;

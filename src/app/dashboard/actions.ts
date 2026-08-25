@@ -182,6 +182,13 @@ export async function saveProfileAction(
     await requireMember(user, organisationId);
 
     const supabase = getAdminSupabase();
+    // Website and address only. The profile's phone / e-mail / AOG columns are
+    // deliberately absent: the form stopped offering them once desks took over
+    // (organisation-wide ones on the Profile tab, per-airport ones on
+    // Stations), and writing `nullable(data, …)` for a field the form no longer
+    // posts would silently wipe whatever is still in those columns on the next
+    // save. Leaving them out keeps the old values until someone clears them on
+    // purpose.
     const { error } = await supabase.from("organisation_profiles").upsert(
       {
         organisation_id: organisationId,
@@ -189,11 +196,7 @@ export async function saveProfileAction(
         description: nullable(data, "description"),
         logo_url: nullable(data, "logoUrl"),
         website: nullable(data, "website"),
-        email: nullable(data, "email"),
-        phone: nullable(data, "phone"),
         address: nullable(data, "address"),
-        aog_phone: nullable(data, "aogPhone"),
-        aog_email: nullable(data, "aogEmail"),
         updated_by: user.id,
       },
       { onConflict: "organisation_id" },

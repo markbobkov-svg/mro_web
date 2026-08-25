@@ -126,9 +126,9 @@ Migrations, all applied by hand in the Supabase SQL editor:
 `0002_managed_station_scope.sql` and `0004_managed_stations.sql` (the old
 override layer), then **`0005_org_owned_data.sql`**, which folds that layer back
 into the real tables, drops it, and hands claimed organisations ownership of
-their own rows, and finally `0006_station_desks.sql`, a one-off tidy-up that
-attaches the last station-less desks to a station. 0002 and 0004 are kept only
-so the history reads straight — 0005 supersedes both.
+their own rows. 0002 and 0004 are kept only so the history reads straight —
+0005 supersedes both. **0005 is the last one**: nothing since has needed a
+schema change.
 
 - **Accounts** are Supabase Auth, e-mail + password, confirmation required.
   All auth goes through Server Actions (`src/lib/authApi.ts`); the tokens live
@@ -186,10 +186,17 @@ website, the `profile ?? station ?? org` card header).
 
 `saveContactAction` will only create a station-less desk when the form posts
 `orgWide=1` — an explicit ask, so a bug in the station form can never quietly
-detach a desk from its airport. Migration `0006_station_desks.sql` rehomed the
-station-less rows a claimed organisation had from the old model (pick the
-station the desk names, else a main base, else the first by code); anything
-station-less now is either scraped or was entered on the Profile tab.
+detach a desk from its airport.
+
+**The Profile tab holds only website and address.** Every way of reaching a
+person is a desk now, so the phone / e-mail / AOG fields were taken off that
+form. `saveProfileAction` therefore does **not** write
+`organisation_profiles.phone / email / aog_phone / aog_email` — writing
+`nullable(data, …)` for a field the form no longer posts would wipe those
+columns on the next save. Values already in them survive and still win the card
+header (`profile ?? station ?? org` in `getAirportDetail`) and still draw the
+card's AOG block, but nothing in the dashboard can edit them any more — clear
+them by hand if a listing shows a stale number.
 
 `getAirportDetail` does *not* show a *station's* desk on every one of that
 organisation's cards — a desk is dropped unless its `station_id` (or, on older

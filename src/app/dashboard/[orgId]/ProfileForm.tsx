@@ -76,6 +76,11 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
         />
       </Field>
 
+      {/* Website and address only. Every way of reaching a person — the phone,
+          the e-mail, the AOG number — is a desk now: organisation-wide ones
+          below, per-airport ones on the Stations tab, each with its own hours.
+          saveProfileAction leaves the old profile phone/e-mail/AOG columns
+          alone rather than nulling them, since nothing posts them any more. */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Website">
           <Input
@@ -85,21 +90,6 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
             placeholder="https://…"
           />
         </Field>
-        <Field label="E-mail">
-          <Input
-            name="email"
-            type="email"
-            defaultValue={p?.email ?? org.scraped.email ?? ""}
-            placeholder="ops@example.com"
-          />
-        </Field>
-        <Field label="Phone">
-          <Input
-            name="phone"
-            defaultValue={p?.phone ?? org.scraped.phone ?? ""}
-            placeholder="+49 …"
-          />
-        </Field>
         <Field label="Address">
           <Input
             name="address"
@@ -107,24 +97,6 @@ function ProfileFields({ org }: { org: DashboardOrg }) {
             placeholder="Street, City, Country"
           />
         </Field>
-      </div>
-
-      <div className="rounded-[2px] border border-white/10 bg-black/40 p-4">
-        <p className="mb-3 text-[10px] uppercase tracking-wide2 text-white/45">
-          AOG desk
-        </p>
-        <p className="mb-3 text-xs text-white/35">
-          The number an operator calls when an aircraft is on the ground. Shown
-          prominently on your card.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="AOG phone">
-            <Input name="aogPhone" defaultValue={p?.aogPhone ?? ""} placeholder="+49 …" />
-          </Field>
-          <Field label="AOG e-mail">
-            <Input name="aogEmail" type="email" defaultValue={p?.aogEmail ?? ""} />
-          </Field>
-        </div>
       </div>
 
       <div className="flex items-center justify-between gap-4 pt-1">

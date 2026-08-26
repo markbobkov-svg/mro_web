@@ -130,3 +130,21 @@ file.
 `EPGN` (Lądowisko Gliniany Las, used by HeliMax) is expected to remain
 unplaceable: the dataset does not carry it under any code, so its coordinates
 have to come from somewhere else.
+
+## `airports_cleanup_junk.sql`
+
+Run last of all. Deletes the 21 rows where the scraper stored a city name in the
+code column — `OSLO`, `RIGA`, `ROMA`, `ORLY`, `FARO`, `KOS`… Each duplicates a
+real airport the seed added, and four of them (`FARO`, `SION`, `KOS`, `PAU`)
+carry strings that are genuine codes on other continents, which is why they were
+deleted rather than backfilled.
+
+Guarded: a row with a station survives, and any other foreign key makes Postgres
+refuse rather than break something silently. Afterwards `unplaceable` should be
+0 — every airport in the register real, placeable and offerable in the Stations
+type-ahead.
+
+**It will come back.** `data_scraper` creates these rows; until that is fixed in
+that repo, every run recreates them. Same root cause as the wrong
+`country_code`s (`ESCF` marked DE though Malmen is Swedish, `RJAA` marked FR
+though Narita is Japanese).

@@ -178,6 +178,13 @@ with it: there is no scraped-versus-typed pair any more, just the row.
   spot; anything else queues for manual review. Free-mail domains never
   auto-approve. Organisations *not yet in the DB* are always reviewed by hand,
   and the organisation row is created on approval.
+- **The scraper writes city names into the code column.** `OSLO`, `RIGA`,
+  `ROMA`, `ORLY`… arrived as `airports` rows with no coordinates, duplicating
+  real airports; four of them (`FARO`, `SION`, `KOS`, `PAU`) are genuine codes
+  on other continents, so backfilling their coordinates would have put Faro in
+  South Africa. `supabase/seed/airports_cleanup_junk.sql` removes them and
+  **every scrape brings them back** — the fix belongs in `data_scraper`, along
+  with the wrong `country_code`s it writes (`ESCF` as DE, `RJAA` as FR).
 - **The airports register is seeded, not only scraped.** `supabase/seed/`
   carries 4 386 European airports from OurAirports (public domain), inserted
   only where nothing already matches by ICAO or IATA. Without it, an airport the

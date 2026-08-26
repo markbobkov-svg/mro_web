@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState } from "react-dom";
 
 import {
@@ -195,12 +195,15 @@ function StationForm({
         </p>
       ) : null}
 
+      {isNew ? (
+        <AirportPicker
+          takenAirportIds={org.stations
+            .map((s) => s.airportId)
+            .filter((id): id is string => Boolean(id))}
+        />
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
-        {isNew ? (
-          <Field label="Airport code" hint="IATA or ICAO">
-            <Input name="airportCode" placeholder="FRA / EDDF" />
-          </Field>
-        ) : null}
         {/* No phone or e-mail: 0008 dropped those columns. A number that
             answers at this airport is a desk in the contacts below, where it
             can carry hours and there can be more than one. */}
@@ -235,6 +238,128 @@ function StationForm({
         </button>
       </div>
     </form>
+  );
+}
+
+interface AirportResult {
+  id: string;
+  iata: string | null;
+  icao: string | null;
+  name: string;
+  city: string | null;
+  countryCode: string | null;
+}
+
+/**
+ * Pick an airport from the register rather than typing its code.
+ *
+ * The form posts the chosen row's **id**, so an organisation cannot invent an
+ * airport or mistype one into a station that points nowhere. Until something is
+ * picked there is no `airportId` field at all, and the action refuses the save.
+ *
+ * Airports the organisation already has a station at are listed but disabled —
+ * better to see "already added" against the row than to submit and be told.
+ */
+function AirportPicker({ takenAirportIds }: { takenAirportIds: string[] }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<AirportResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [picked, setPicked] = useState<AirportResult | null>(null);
+  const requestId = useRef(0);
+  const taken = new Set(takenAirportIds);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2 || picked) {
+      setResults([]);
+      return;
+    }
+    const id = ++requestId.current;
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/dashboard/airport-search?q=${encodeURIComponent(q)}`,
+        );
+        const body = await res.json();
+        // Ignore a slow response a newer keystroke has already superseded.
+        if (id === requestId.current) setResults(body.results ?? []);
+      } catch {
+        if (id === requestId.current) setResults([]);
+      } finally {
+        if (id === requestId.current) setSearching(false);
+      }
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [query, picked]);
+
+  const label = (a: AirportResult) =>
+    `${a.iata ?? a.icao ?? "—"} · ${a.name}`;
+
+  return (
+    <div>
+      {picked ? <input type="hidden" name="airportId" value={picked.id} /> : null}
+
+      <Field label="Airport" hint="type a code, a name or a city">
+        <Input
+          value={picked ? label(picked) : query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPicked(null);
+          }}
+          placeholder="FRA, EDDF, Frankfurt…"
+          autoComplete="off"
+        />
+      </Field>
+
+      {query.trim().length >= 2 && !picked ? (
+        <ul className="mt-2 max-h-56 divide-y divide-white/10 overflow-y-auto scroll-thin rounded-[2px] border border-white/10">
+          {searching && results.length === 0 ? (
+            <li className="px-3 py-2.5 text-xs text-white/35">Searching…</li>
+          ) : null}
+          {!searching && results.length === 0 ? (
+            <li className="px-3 py-2.5 text-xs text-white/35">
+              No airport matches. Only airports already in the register can be
+              added.
+            </li>
+          ) : null}
+          {results.map((a) => {
+            const already = taken.has(a.id);
+            return (
+              <li key={a.id}>
+                <button
+                  type="button"
+                  disabled={already}
+                  onClick={() => {
+                    setPicked(a);
+                    setResults([]);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left
+                    transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-white/90">
+                      <span className="mr-2 font-mono text-xs text-accent">
+                        {a.iata ?? a.icao ?? "—"}
+                      </span>
+                      {a.name}
+                    </span>
+                    <span className="block truncate text-xs text-white/35">
+                      {[a.city, a.countryCode].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                  {already ? (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide2 text-white/35">
+                      already added
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

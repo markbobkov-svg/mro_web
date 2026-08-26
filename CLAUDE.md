@@ -178,6 +178,13 @@ with it: there is no scraped-versus-typed pair any more, just the row.
   spot; anything else queues for manual review. Free-mail domains never
   auto-approve. Organisations *not yet in the DB* are always reviewed by hand,
   and the organisation row is created on approval.
+- **A station can only point at an airport in the register.** The Stations tab
+  has a type-ahead over `airports` (`/api/dashboard/airport-search`, matching
+  code, name or city) and the form posts the chosen row's **id**, never a typed
+  code. `saveStationAction` re-reads that id against `airports` rather than
+  trusting it, so a hand-crafted request cannot invent an airport either.
+  Airports the organisation already staffs are shown disabled as "already
+  added".
 - **What an organisation may edit directly — everything except approvals:**
   profile; its **stations** (which airports it works at, their details, and
   which are a **main base**); the **desks** at each station; its own

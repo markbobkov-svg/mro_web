@@ -118,6 +118,74 @@ export interface ClaimRow {
   createdAt: string;
 }
 
+/** One airport in the station type-ahead. */
+export interface AirportSummary {
+  id: string;
+  iata: string | null;
+  icao: string | null;
+  name: string;
+  city: string | null;
+  countryCode: string | null;
+}
+
+/**
+ * Type-ahead over the `airports` register for the Stations tab.
+ *
+ * An organisation picks an airport from here and the form posts its **id**, so
+ * a station can only ever point at a row that exists. Typing a code by hand
+ * used to be the only way in, and a typo either failed the lookup or — worse —
+ * matched the wrong field.
+ *
+ * Matches a code, a name or a city, so "FRA", "EDDF", "Frankfurt" and
+ * "Frankfurt am Main" all find the same row.
+ */
+export async function searchAirports(
+  query: string,
+  limit = 8,
+): Promise<AirportSummary[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const supabase = getAdminSupabase();
+  // PostgREST reads `or=(...)` as a comma-separated list, so a comma or bracket
+  // in the query would change the filter's meaning rather than be searched for.
+  const escaped = q.replace(/[%_,()]/g, " ").trim();
+  if (!escaped) return [];
+
+  const { data, error } = await supabase
+    .from("airports")
+    .select("id, iata_code, icao_code, name, city, country_code")
+    .or(
+      `iata_code.ilike.${escaped}%,icao_code.ilike.${escaped}%,` +
+        `name.ilike.%${escaped}%,city.ilike.%${escaped}%`,
+    )
+    .limit(limit * 4);
+  if (error) throw new Error(`searchAirports: ${error.message}`);
+
+  const upper = escaped.toUpperCase();
+  const rows = ((data as Record<string, unknown>[]) ?? []).map((r) => ({
+    id: String(r.id),
+    iata: (r.iata_code as string | null) ?? null,
+    icao: (r.icao_code as string | null) ?? null,
+    name: String(r.name ?? "Airport"),
+    city: (r.city as string | null) ?? null,
+    countryCode: (r.country_code as string | null) ?? null,
+  }));
+
+  // Someone typing "FRA" wants Frankfurt first, not the first alphabetical name
+  // that happens to contain those letters. Exact code, then code prefix, then
+  // the name/city matches.
+  const rank = (a: AirportSummary): number => {
+    if (a.iata?.toUpperCase() === upper || a.icao?.toUpperCase() === upper) return 0;
+    if (a.iata?.toUpperCase().startsWith(upper) || a.icao?.toUpperCase().startsWith(upper)) return 1;
+    if (a.name.toUpperCase().startsWith(upper)) return 2;
+    return 3;
+  };
+  return rows
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
 export interface OrgSummary {
   id: string;
   name: string;

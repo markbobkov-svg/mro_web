@@ -233,17 +233,23 @@ function locationScope(data: FormData, key: string): string | null {
 }
 
 /** Look an airport up by IATA or ICAO code. */
-async function airportIdByCode(
+/**
+ * An airport id is only usable if it names a real row. The Stations form posts
+ * an id chosen from the type-ahead, so this is the check that a hand-crafted
+ * request cannot get past — the register is the whole set of valid airports,
+ * and an organisation may not invent one.
+ */
+async function verifiedAirportId(
   supabase: ReturnType<typeof getAdminSupabase>,
-  code: string,
+  airportId: string,
 ): Promise<string | null> {
-  const c = code.trim().toUpperCase();
-  if (!c) return null;
+  const id = airportId.trim();
+  // A malformed id would make Postgres reject the uuid comparison outright.
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const { data } = await supabase
     .from("airports")
     .select("id")
-    .or(`iata_code.eq.${c},icao_code.eq.${c}`)
-    .limit(1)
+    .eq("id", id)
     .maybeSingle();
   return data ? String((data as { id: string }).id) : null;
 }
@@ -643,7 +649,7 @@ export async function saveStationAction(
   const user = await requireUser();
   const organisationId = str(data, "organisationId");
   const stationId = str(data, "stationId");
-  const airportCode = str(data, "airportCode");
+  const postedAirportId = str(data, "airportId");
 
   // A station is a place, not a contact: where it is, and whether it is a main
   // base. Every phone and e-mail is a desk in organisation_contacts, which
@@ -667,10 +673,12 @@ export async function saveStationAction(
         .eq("organisation_id", organisationId);
       if (error) throw error;
     } else {
-      if (!airportCode) return { error: "Enter the airport's IATA or ICAO code." };
-      const airportId = await airportIdByCode(supabase, airportCode);
+      // The form posts an id picked from the airports register, never a typed
+      // code — but the id still comes from the request, so it is re-read here
+      // rather than trusted. A station can only point at a row that exists.
+      const airportId = await verifiedAirportId(supabase, postedAirportId);
       if (!airportId) {
-        return { error: `No airport matches “${airportCode}”. Check the code.` };
+        return { error: "Pick an airport from the list." };
       }
       const { data: existing } = await supabase
         .from("organisation_stations")

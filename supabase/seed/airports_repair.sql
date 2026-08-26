@@ -127,3 +127,20 @@ delete from public.airports a
 -- EPGN (Lądowisko Gliniany Las, HeliMax) is expected to survive: it is a Polish
 -- landing site the dataset does not carry at all, so its coordinates have to
 -- come from somewhere else.
+
+-- ============================================== 4. EPGN, added after the fact
+--
+-- Lądowisko Gliniany Las — a registered private helicopter landing site in
+-- Świętokrzyskie, used by HeliMax Sp. z o.o. OurAirports does not carry it
+-- under any code, so the coordinates come from the Polish register listing:
+-- N51°01'40.9" E20°24'09.3"  ->  51.0280278, 20.4025833
+-- https://lotniska.dlapilota.pl/gliniany-las-h
+--
+-- A helicopter site for a helicopter operator, which is the sanity check that
+-- it is the right place.
+
+update public.airports
+   set latitude  = 51.0280278,
+       longitude = 20.4025833
+ where icao_code = 'EPGN'
+   and (latitude is null or longitude is null);

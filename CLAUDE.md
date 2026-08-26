@@ -359,4 +359,9 @@ Tables: `airports`, `authorities`, `organisations`, `organisation_stations`,
 - Headless Chromium does not composite WebGL into screenshots, so the vector
   map renders black in automated captures. DOM/CSS overlays (panel, search,
   brand) do capture fine — verify the map itself in a real browser.
+- **A pin means at least one MRO is there.** `getAirportMarkers` counts an
+  airport only through a station row that names an `organisation_id`; scraped
+  rows can carry an airport with none, and those used to produce a dot with
+  `orgCount: 0` whose card then read "Unknown organisation".
+  `getAirportDetail` drops the same rows, so the two agree.
 - Supabase RLS: the publishable key only sees tables with public read policies.

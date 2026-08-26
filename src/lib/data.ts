@@ -65,12 +65,19 @@ export async function getAirportMarkers(orgScope?: string[] | null): Promise<{
     if (error) throw new Error(`getAirportMarkers(stations): ${error.message}`);
     if (!data || data.length === 0) break;
     for (const row of data as any[]) {
+      // An airport earns a pin only through a station that names an
+      // organisation. Scraped rows can carry an airport with no
+      // organisation_id, and those used to create the map entry anyway — a dot
+      // with orgCount 0 and, when clicked, a card reading "Unknown
+      // organisation". Skipping them here keeps the invariant every marker
+      // implies: at least one MRO is actually there.
+      if (!row.organisation_id) continue;
       let set = airportOrgs.get(row.airport_id);
       if (!set) {
         set = new Set();
         airportOrgs.set(row.airport_id, set);
       }
-      if (row.organisation_id) set.add(row.organisation_id);
+      set.add(row.organisation_id);
     }
     if (data.length < PAGE) break;
   }
@@ -226,7 +233,12 @@ export async function getAirportDetail(
   if (aErr) throw new Error(`getAirportDetail(airport): ${aErr.message}`);
   if (sErr) throw new Error(`getAirportDetail(stations): ${sErr.message}`);
 
-  const stationRows = (stations as any[]) ?? [];
+  // A station with no organisation_id is not an MRO presence — it used to
+  // become a card headed "Unknown organisation". Dropped here for the same
+  // reason getAirportMarkers refuses it a pin.
+  const stationRows = ((stations as any[]) ?? []).filter(
+    (s) => s.organisation_id,
+  );
 
   const airportInfo = {
     id: airportId,

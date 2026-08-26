@@ -64,3 +64,34 @@ python3 generate_airports_seed.py
 
 Edit the bbox or `SKIP_TYPES` at the top of the script to change the scope —
 worldwide with a code is ~45 000 rows, without heliports ~33 000.
+
+## `airports_fix_coords.sql`
+
+Run after the seed. 79 rows in the register carried no latitude/longitude, so
+`getAirportMarkers` skipped them (`if (!coordinates) continue`) and a station
+there was invisible on the map — 58 stations pointed into that set.
+
+It fills 53 of them from OurAirports, matched on the code already stored,
+touching only rows still missing a coordinate.
+
+**Six are excluded on purpose.** The scraper stored some city names in the code
+column, and those strings are real codes elsewhere:
+
+| stored | the code actually means | should be |
+|---|---|---|
+| `FARO` | Rooiberg Airport, South Africa | Faro is `LPFR` |
+| `SION` | Tibagi Heliport, Brazil | Sion is `LSGS` |
+| `KOS`  | Sihanouk Intl, Cambodia | Kos is IATA `KGS` |
+| `PAU`  | Pauk Airport, Myanmar | Pau is IATA `PUF` |
+| `LFEC` | Ouessant Airport | stored as "Châtellerault", which is `LFCA` |
+| `LOXN` | Wiener Neustadt West, Austria | stored as "Osoppo, Udine, Italy" |
+
+Filling those would put the airport in the wrong country and then draw a pin
+there. They need a decision, not a coordinate.
+
+A further 20 rows are city names that match no airport code at all — `BARI`,
+`OSLO`, `RIGA`, `ROMA`, `ROME`, `ORLY`, `LINZ`, `PULA`, `REUS`, `GENF`, `GENK`,
+`GOMA`, `GRAY`, `BELP`, `BRNO`, `CAEN`, `CALI`, `EPGN`, `LEAZ`, `DGX`. Most now
+duplicate a real airport the seed added (`OSLO` beside `ENGM`, `RIGA` beside
+`EVRA`), so the fix is to repoint their stations at the real row and delete
+them — a merge, not a backfill.

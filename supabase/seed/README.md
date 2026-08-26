@@ -95,3 +95,38 @@ A further 20 rows are city names that match no airport code at all — `BARI`,
 duplicate a real airport the seed added (`OSLO` beside `ENGM`, `RIGA` beside
 `EVRA`), so the fix is to repoint their stations at the real row and delete
 them — a merge, not a backfill.
+
+## `airports_repair.sql`
+
+Run last. Three things the earlier files could not do:
+
+1. **Places `DGX` (MOD St Athan) and `LEAZ` (Alcazarén)** — real airfields the
+   dataset carries under no code, so the seed never had them and only the
+   coordinates were missing.
+2. **Merges `LFEC` and `LOXN`.** Both stored the right name under another
+   airport's code — `LFEC` is Ouessant but holds Safran's Châtellerault site
+   (`LFCA`), `LOXN` is Wiener Neustadt West but holds AERO 4 M's Osoppo
+   (`LIKH`). The station is repointed and the impostor row deleted, guarded so
+   a half-applied run cannot orphan a station.
+3. **Withdraws 39 seeded rows whose code cannot be trusted** — see below.
+
+### The `icao_code` / `ident` problem
+
+The generator reads the dataset's `icao_code`. For 39 of 4 386 European rows
+that column disagrees with the row's own `ident`, and neither is reliably
+correct:
+
+| row | `ident` | `icao_code` | which is right |
+|---|---|---|---|
+| MOD St Athan, Wales | `EGDX` | `EGSY` | `ident` — `EGSY` is Sheffield |
+| Kristianstad hospital heliport | `HSHI` | `ESHI` | `icao_code` — `HSHI` is a Sudan prefix |
+
+They cannot be corrected in bulk, and a row under the wrong code is worse than
+a missing one: the type-ahead offers the wrong airport and a station can be
+attached to it. So they are deleted, and only where nothing points at them —
+anything already in use survives and shows up in the check at the foot of the
+file.
+
+`EPGN` (Lądowisko Gliniany Las, used by HeliMax) is expected to remain
+unplaceable: the dataset does not carry it under any code, so its coordinates
+have to come from somewhere else.

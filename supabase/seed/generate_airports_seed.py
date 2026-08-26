@@ -38,6 +38,14 @@ def main():
                 continue
             # OurAirports keeps the ICAO in icao_code, but older rows only carry
             # it as gps_code.
+            #
+            # KNOWN LIMITATION: for ~39 European rows this column disagrees with
+            # the row's `ident`, and neither is reliably the real ICAO — `ident`
+            # is right for MOD St Athan (EGDX, where icao_code says EGSY, which
+            # is Sheffield), `icao_code` is right for the Kristianstad hospital
+            # heliport (ESHI, where ident says HSHI). airports_repair.sql
+            # withdraws those rows rather than guessing. If you regenerate,
+            # expect to re-run that file.
             icao = (r["icao_code"] or r["gps_code"] or "").strip().upper() or None
             iata = (r["iata_code"] or "").strip().upper() or None
             if not icao and not iata:

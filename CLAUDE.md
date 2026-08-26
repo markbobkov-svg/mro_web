@@ -178,6 +178,11 @@ with it: there is no scraped-versus-typed pair any more, just the row.
   spot; anything else queues for manual review. Free-mail domains never
   auto-approve. Organisations *not yet in the DB* are always reviewed by hand,
   and the organisation row is created on approval.
+- **The airports register is seeded, not only scraped.** `supabase/seed/`
+  carries 4 386 European airports from OurAirports (public domain), inserted
+  only where nothing already matches by ICAO or IATA. Without it, an airport the
+  scraper never met is an airport no organisation can add a station at, since
+  the picker below only offers existing rows.
 - **A station can only point at an airport in the register.** The Stations tab
   has a type-ahead over `airports` (`/api/dashboard/airport-search`, matching
   code, name or city) and the form posts the chosen row's **id**, never a typed
